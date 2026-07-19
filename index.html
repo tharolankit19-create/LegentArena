@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0710" />
+  <meta name="description" content="LegentArena — Free Fire Tournament Hub. Join Solo, Duo & Squad tournaments, win prize pools, climb the leaderboard." />
+  <title>LegentArena • Free Fire Tournament Hub</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=Orbitron:wght@600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/css/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>" />
+</head>
+<body>
+  <!-- Animated background layers -->
+  <div class="bg-grid" aria-hidden="true"></div>
+  <div class="bg-glow bg-glow-1" aria-hidden="true"></div>
+  <div class="bg-glow bg-glow-2" aria-hidden="true"></div>
+
+  <!-- Top navigation -->
+  <header class="nav" id="nav">
+    <div class="nav-inner">
+      <a href="#/" class="brand" aria-label="LegentArena home">
+        <span class="brand-mark">🔥</span>
+        <span class="brand-text">LEGENT<span class="brand-accent">ARENA</span></span>
+      </a>
+
+      <nav class="nav-links" id="navLinks">
+        <a href="#/" data-nav>Home</a>
+        <a href="#/tournaments" data-nav>Tournaments</a>
+        <a href="#/leaderboard" data-nav>Leaderboard</a>
+        <a href="#/my-tournaments" data-nav data-auth>My Matches</a>
+        <a href="#/wallet" data-nav data-auth>Wallet</a>
+        <a href="#/admin" data-nav data-admin>Admin</a>
+      </nav>
+
+      <div class="nav-actions" id="navActions"><!-- injected by app --></div>
+
+      <button class="hamburger" id="hamburger" aria-label="Toggle menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Mobile bottom tab bar -->
+  <nav class="tabbar" id="tabbar" aria-label="Primary">
+    <a href="#/" data-nav><span class="ti">🏠</span><span>Home</span></a>
+    <a href="#/tournaments" data-nav><span class="ti">🎮</span><span>Play</span></a>
+    <a href="#/leaderboard" data-nav><span class="ti">🏆</span><span>Ranks</span></a>
+    <a href="#/wallet" data-nav data-auth><span class="ti">💰</span><span>Wallet</span></a>
+    <a href="#/profile" data-nav data-auth><span class="ti">👤</span><span>Me</span></a>
+  </nav>
+
+  <!-- Main app view -->
+  <main id="app" class="app-view" role="main"></main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-brand">🔥 LEGENT<span class="brand-accent">ARENA</span></div>
+      <p class="footer-note">Play. Compete. Win. — A demo Free Fire tournament platform. Data is stored locally in your browser.</p>
+      <p class="footer-fine">This is an independent fan project and is not affiliated with, endorsed by, or sponsored by Garena / Free Fire.</p>
+    </div>
+  </footer>
+
+  <!-- Modal + toast mount points -->
+  <div id="modalRoot"></div>
+  <div id="toastRoot" class="toast-root" aria-live="polite"></div>
+
+  <!-- Scripts (plain, order matters — no bundler required) -->
+  <script src="assets/js/config.js"></script>
+  <script src="assets/js/store.js"></script>
+  <script src="assets/js/ui.js"></script>
+  <script src="assets/js/auth.js"></script>
+  <script src="assets/js/payments.js"></script>
+  <script src="assets/js/pages.js"></script>
+  <script src="assets/js/admin.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>
