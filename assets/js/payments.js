@@ -1,37 +1,24 @@
 /* =========================================================================
- * LegentArena — Payments
- * Simulated Razorpay-style checkout. If APP_CONFIG.RAZORPAY.enabled is true
- * AND the real checkout script is present, it hands off to real Razorpay.
- * Otherwise it shows a realistic simulation modal (success/failure).
+ * LegentArena — Payments (Razorpay-style, simulated by default)
+ * Charges REAL rupees; the wallet credits COINS (1 Coin = ₹coinPerRupee).
+ * If APP_CONFIG.RAZORPAY.enabled && SDK present -> real Razorpay.
  * ======================================================================= */
 (function () {
   'use strict';
 
-  /**
-   * Pay(amount, opts) -> Promise resolving to
-   *   { status:'success', paymentId } | { status:'failed', reason } | { status:'cancelled' }
-   */
-  function Pay(amount, opts) {
+  function Pay(rupees, opts) {
     opts = opts || {};
     var cfg = (window.APP_CONFIG && APP_CONFIG.RAZORPAY) || {};
-
-    // Real Razorpay path (only if enabled AND SDK loaded AND a public key set).
-    if (cfg.enabled && cfg.keyId && window.Razorpay) {
-      return realRazorpay(amount, opts, cfg);
-    }
-    return simulate(amount, opts);
+    if (cfg.enabled && cfg.keyId && window.Razorpay) return realRazorpay(rupees, opts, cfg);
+    return simulate(rupees, opts);
   }
 
-  function realRazorpay(amount, opts, cfg) {
+  function realRazorpay(rupees, opts, cfg) {
     return new Promise(function (resolve) {
-      // In production you must create an order server-side and pass order_id here.
       var rzp = new window.Razorpay({
-        key: cfg.keyId,
-        amount: Math.round(amount * 100),
-        currency: 'INR',
+        key: cfg.keyId, amount: Math.round(rupees * 100), currency: 'INR',
         name: (window.APP_CONFIG && APP_CONFIG.brand) || 'LegentArena',
-        description: opts.description || 'Tournament payment',
-        theme: { color: '#ff7a18' },
+        description: opts.description || 'Add Coins', theme: { color: '#2f7bff' },
         handler: function (res) { resolve({ status: 'success', paymentId: res.razorpay_payment_id }); },
         modal: { ondismiss: function () { resolve({ status: 'cancelled' }); } },
       });
@@ -39,73 +26,50 @@
     });
   }
 
-  function simulate(amount, opts) {
+  function simulate(rupees, opts) {
     return new Promise(function (resolve) {
-      var UIel = UI.el;
-      var body = UIel('div', { class: 'pay' }, [
-        UIel('div', { class: 'pay-head' }, [
-          UIel('div', { class: 'pay-logo' }, ['🔒']),
-          UIel('div', {}, [
-            UIel('div', { class: 'pay-brand' }, [(window.APP_CONFIG && APP_CONFIG.brand) || 'LegentArena']),
-            UIel('div', { class: 'pay-secure' }, ['Secure checkout • simulated']),
+      var E = UI.el;
+      var body = E('div', { class: 'pay' }, [
+        E('div', { class: 'pay-head' }, [
+          E('div', { class: 'pay-logo' }, ['🔒']),
+          E('div', {}, [
+            E('div', { class: 'pay-brand' }, [(window.APP_CONFIG && APP_CONFIG.brand) || 'LegentArena']),
+            E('div', { class: 'pay-secure' }, ['UPI / Card / Netbanking • 100% secure']),
           ]),
         ]),
-        UIel('div', { class: 'pay-amount' }, [
-          UIel('span', { class: 'pay-amount-label' }, [opts.description || 'Amount payable']),
-          UIel('span', { class: 'pay-amount-val' }, [UI.money(amount)]),
+        E('div', { class: 'pay-amount' }, [
+          E('span', { class: 'pay-amount-label' }, [opts.description || 'Amount payable']),
+          E('span', { class: 'pay-amount-val' }, [UI.rupees(rupees)]),
         ]),
-        UIel('div', { class: 'pay-methods' }, [
-          methodRow('📱', 'UPI', 'GPay / PhonePe / Paytm'),
-          methodRow('💳', 'Card', 'Visa / Mastercard / RuPay'),
-          methodRow('🏦', 'Netbanking', 'All major banks'),
+        E('div', { class: 'pay-methods' }, [
+          row('📱', 'UPI', 'GPay / PhonePe / Paytm'),
+          row('💳', 'Card', 'Visa / Mastercard / RuPay'),
+          row('🏦', 'Netbanking', 'All major banks'),
         ]),
-        UIel('p', { class: 'pay-note muted' }, ['This is a demo. No real money moves. Choose an outcome below to simulate the gateway response.']),
+        E('p', { class: 'pay-note muted' }, ['Demo gateway — no real money moves. Choose an outcome to simulate the bank response.']),
       ]);
 
       var m = UI.openModal({
-        title: 'Complete Payment',
-        node: body,
+        title: 'Pay ' + UI.rupees(rupees), node: body,
         actions: [
-          { label: 'Simulate Failure', kind: 'danger', onClick: function () {
-              finish({ status: 'failed', reason: 'Payment declined by bank (simulated).' });
-            } },
-          { label: 'Pay ' + UI.money(amount), kind: 'primary', onClick: function () {
-              runProcessing();
-              return true; // keep modal open; we control closing
-            } },
+          { label: 'Fail', kind: 'danger', onClick: function () { finish({ status: 'failed', reason: 'Payment declined by bank (simulated).' }); } },
+          { label: 'Pay Now', kind: 'primary', onClick: function () { processing(); return true; } },
         ],
       });
 
       var settled = false;
-      function finish(result) {
-        if (settled) return;
-        settled = true;
-        UI.closeModal();
-        resolve(result);
-      }
-
-      function runProcessing() {
+      function finish(r) { if (settled) return; settled = true; UI.closeModal(); resolve(r); }
+      function processing() {
         body.innerHTML = '';
-        body.appendChild(UIel('div', { class: 'pay-processing' }, [
-          UIel('div', { class: 'spinner' }),
-          UIel('div', { class: 'pay-proc-text' }, ['Contacting gateway…']),
-        ]));
-        // hide footer buttons during processing
-        var foot = m.overlay.querySelector('.modal-foot');
-        if (foot) foot.style.display = 'none';
-        setTimeout(function () {
-          finish({ status: 'success', paymentId: 'pay_sim_' + Date.now().toString(36) });
-        }, 1400);
+        body.appendChild(E('div', { class: 'pay-processing' }, [E('div', { class: 'spinner' }), E('div', { class: 'pay-proc-text' }, ['Contacting bank…'])]));
+        var foot = m.overlay.querySelector('.sheet-foot'); if (foot) foot.style.display = 'none';
+        setTimeout(function () { finish({ status: 'success', paymentId: 'pay_sim_' + Date.now().toString(36) }); }, 1300);
       }
-
-      function methodRow(icon, name, sub) {
-        return UIel('div', { class: 'pay-method' }, [
-          UIel('span', { class: 'pay-method-ic' }, [icon]),
-          UIel('div', {}, [
-            UIel('div', { class: 'pay-method-name' }, [name]),
-            UIel('div', { class: 'pay-method-sub muted' }, [sub]),
-          ]),
-          UIel('span', { class: 'pay-method-dot' }, ['›']),
+      function row(ic, name, sub) {
+        return E('div', { class: 'pay-method' }, [
+          E('span', { class: 'pay-method-ic' }, [ic]),
+          E('div', {}, [E('div', { class: 'pay-method-name' }, [name]), E('div', { class: 'pay-method-sub muted' }, [sub])]),
+          E('span', { class: 'pay-method-dot' }, ['›']),
         ]);
       }
     });

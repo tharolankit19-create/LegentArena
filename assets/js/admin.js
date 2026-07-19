@@ -1,413 +1,309 @@
 /* =========================================================================
- * LegentArena — Admin panel
- * Create/edit tournaments, verify results (auto prize distribution),
- * manage withdrawals, view users. Gated behind admin role + password.
+ * LegentArena — Admin panel (mobile-first)
+ * Settings (commission/coin rate/split), tournament CRUD, room details,
+ * declare results (auto coin payout), withdrawals, users. Gated by role +
+ * admin password once per session.
  * ======================================================================= */
 (function () {
   'use strict';
 
-  var esc = UI.esc, money = UI.money;
-
-  function frag(html) { var d = document.createElement('div'); d.innerHTML = html; return d; }
-
-  function gate() {
-    // Must be admin-role AND pass a password check per session (sessionStorage).
-    var u = Auth.current();
-    if (!u || u.role !== 'admin') {
-      return { ok: false, node: frag('' +
-        '<section class="section"><div class="empty glass"><span class="empty-ic">🔒</span>' +
-        '<h2>Admin access only</h2><p class="muted">Log in with an admin account to continue.</p>' +
-        '<a href="#/login" class="btn btn-primary btn-sm">Go to login</a></div></section>') };
-    }
-    if (sessionStorage.getItem('ffth_admin_ok') === '1') return { ok: true };
-    return { ok: 'password' };
-  }
-
-  function passwordPrompt() {
-    var body = frag('' +
-      '<div class="admin-lock">' +
-        '<div class="lock-ic">🔐</div>' +
-        '<p class="muted">Enter the admin password to open the control room.</p>' +
-        '<div class="field"><input id="admPw" type="password" placeholder="Admin password" /><span class="field-err"></span></div>' +
-      '</div>');
-    UI.openModal({
-      title: 'Admin Authentication',
-      node: body,
-      actions: [
-        { label: 'Cancel', kind: 'ghost', onClick: function () { location.hash = '#/'; } },
-        { label: 'Unlock', kind: 'primary', onClick: function () {
-            var i = body.querySelector('#admPw');
-            var pw = (window.APP_CONFIG && APP_CONFIG.adminPassword) || 'admin123';
-            if (i.value !== pw) { UI.fieldError(i, 'Incorrect password.'); return true; }
-            sessionStorage.setItem('ffth_admin_ok', '1');
-            UI.closeModal();
-            if (window.App) App.route();
-          } },
-      ],
-    });
-  }
+  var esc = UI.esc, coins = UI.coins, num = UI.num;
+  function frag(h) { var d = document.createElement('div'); d.innerHTML = h; return d; }
 
   function panel() {
-    var g = gate();
-    if (g.node) return g.node;
-    if (g === 'password' || g.ok === 'password') { setTimeout(passwordPrompt, 30); return frag('<section class="section"></section>'); }
+    var u = Auth.current();
+    if (!u || u.role !== 'admin') {
+      return UI.screen({ title: 'Admin', backTo: '#/', html: '<div class="empty"><span class="empty-ic">🔒</span><h3>Admin only</h3><p class="muted">Login with the admin account (' + esc((APP_CONFIG.defaults && APP_CONFIG.defaults.adminMobile) || '') + ').</p><a href="#/login" class="btn btn-primary btn-sm">Login</a></div>' });
+    }
+    if (sessionStorage.getItem('ffth_admin_ok') !== '1') { setTimeout(pwPrompt, 20); return UI.screen({ title: 'Admin', backTo: '#/' }); }
 
-    var tab = (location.hash.split('?')[1] || '').replace('tab=', '') || 'tournaments';
-
-    var node = frag('' +
-    '<section class="section admin">' +
-      '<div class="page-head"><h1 class="page-title">🛠️ Admin Control Room</h1><p class="muted">Manage the arena.</p></div>' +
-      statsRow() +
-      '<div class="filter-group admin-tabs" id="admTabs">' +
-        tabBtn('tournaments', '🎮 Tournaments', tab) +
-        tabBtn('results', '📸 Results', tab) +
-        tabBtn('withdrawals', '💸 Withdrawals', tab) +
-        tabBtn('users', '👥 Users', tab) +
-      '</div>' +
-      '<div id="admBody"></div>' +
-    '</section>');
-
-    node.querySelector('#admTabs').addEventListener('click', function (e) {
-      var b = e.target.closest('[data-tab]'); if (!b) return;
-      tab = b.getAttribute('data-tab');
-      node.querySelectorAll('#admTabs .fbtn').forEach(function (x) { x.classList.remove('active'); });
-      b.classList.add('active');
-      renderTab(node.querySelector('#admBody'), tab);
+    var tab = 'tournaments';
+    var node = UI.screen({ title: 'Admin Panel', backTo: '#/' });
+    var body = node._body;
+    body.innerHTML = statsRow() +
+      '<div class="admin-tabs" id="atabs">' +
+        tb('tournaments', '🎮 Contests', tab) + tb('results', '📸 Results', tab) +
+        tb('withdrawals', '💸 Payouts', tab) + tb('users', '👥 Users', tab) + tb('settings', '⚙️ Settings', tab) +
+      '</div><div id="abody"></div>';
+    body.querySelector('#atabs').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-tab]'); if (!b) return; tab = b.getAttribute('data-tab');
+      body.querySelectorAll('#atabs .atab').forEach(function (x) { x.classList.remove('active'); }); b.classList.add('active');
+      renderTab(body.querySelector('#abody'), tab);
     });
-
-    renderTab(node.querySelector('#admBody'), tab);
+    renderTab(body.querySelector('#abody'), tab);
     return node;
   }
+  function tb(k, l, a) { return '<button class="atab ' + (k === a ? 'active' : '') + '" data-tab="' + k + '">' + l + '</button>'; }
 
-  function tabBtn(key, label, active) {
-    return '<button class="fbtn ' + (key === active ? 'active' : '') + '" data-tab="' + key + '">' + label + '</button>';
+  function pwPrompt() {
+    var s = Store.settings(); var pw = s.adminPassword || (APP_CONFIG.defaults && APP_CONFIG.defaults.adminPassword) || 'admin@123';
+    var body = frag('<div class="admin-lock"><div class="lock-ic">🔐</div><p class="muted">Enter admin password.</p><div class="field"><input id="apw" type="password" placeholder="Admin password"/><span class="field-err"></span></div></div>');
+    UI.openModal({ title: 'Admin Login', node: body,
+      actions: [ { label: 'Cancel', kind: 'ghost', onClick: function () { location.hash = '#/'; } },
+        { label: 'Unlock', kind: 'primary', onClick: function () {
+          var i = body.querySelector('#apw'); if (i.value !== pw) { UI.fieldError(i, 'Wrong password.'); return true; }
+          sessionStorage.setItem('ffth_admin_ok', '1'); UI.closeModal(); if (window.App) App.route();
+        } } ] });
   }
 
   function statsRow() {
     var users = Store.users().filter(function (u) { return u.role === 'user'; });
-    var tours = Store.tournaments();
     var pendingRes = Store.matches().filter(function (m) { return !m.verified; }).length;
-    var pendingWd = Store.transactions().filter(function (t) { return t.status === 'pending'; }).length;
-    var revenue = Store.transactions().filter(function (t) { return t.type === 'debit' && t.status === 'success' && /^Entry:/.test(t.description); })
-      .reduce(function (s, t) { return s + t.amount; }, 0);
-    function tile(ic, v, l) { return '<div class="stile glass"><span class="stile-ic">' + ic + '</span><span class="stile-val">' + v + '</span><span class="stile-label muted">' + l + '</span></div>'; }
-    return '<div class="grid admin-stats">' +
-      tile('👥', users.length, 'Players') +
-      tile('🎮', tours.length, 'Tournaments') +
-      tile('📸', pendingRes, 'Results pending') +
-      tile('💸', pendingWd, 'Withdrawals pending') +
-      tile('💰', money(revenue), 'Entry revenue') +
-    '</div>';
+    var pendingWd = Store.transactions().filter(function (t) { return t.meta && t.meta.kind === 'withdrawal' && t.status === 'pending'; }).length;
+    var revenue = Store.tournaments().reduce(function (s, t) {
+      return s + Math.floor(Store.collection(t) * Store.commissionOf(t) / 100);
+    }, 0);
+    function tile(ic, v, l) { return '<div class="itile"><span class="itile-ic">' + ic + '</span><span class="itile-val">' + v + '</span><span class="itile-label">' + l + '</span></div>'; }
+    return '<div class="info-grid admin-stats">' + tile('👥', users.length, 'Players') + tile('📸', pendingRes, 'Results') +
+      tile('💸', pendingWd, 'Payouts') + tile('🪙', coins(revenue), 'Your fees') + '</div>';
   }
 
   function renderTab(body, tab) {
-    if (tab === 'tournaments') return renderTournaments(body);
+    if (tab === 'tournaments') return renderTours(body);
     if (tab === 'results') return renderResults(body);
     if (tab === 'withdrawals') return renderWithdrawals(body);
     if (tab === 'users') return renderUsers(body);
+    if (tab === 'settings') return renderSettings(body);
   }
 
-  /* ---- Tournaments management ---- */
-  function renderTournaments(body) {
-    var tours = Store.tournaments().slice().sort(function (a, b) { return (b.date).localeCompare(a.date); });
-    body.innerHTML = '' +
-      '<div class="admin-bar"><button class="btn btn-primary btn-sm" id="newTour">＋ New Tournament</button></div>' +
-      '<div class="admin-list">' + tours.map(function (t) {
-        var filled = Store.registeredCount(t.id);
-        return '<div class="admin-row glass">' +
-          '<div class="ar-main"><strong>' + esc(t.title) + '</strong>' +
-            '<div class="muted small">' + esc(t.type) + ' • ' + UI.fmtDate(t.date) + ' ' + esc(t.time) + ' • ' + filled + '/' + t.maxTeams + ' • ' + money(t.prizePool) + '</div></div>' +
-          '<div class="ar-actions">' +
-            '<select class="status-sel" data-status="' + t.id + '">' +
-              ['upcoming', 'live', 'completed'].map(function (s) { return '<option value="' + s + '"' + (t.status === s ? ' selected' : '') + '>' + s + '</option>'; }).join('') +
-            '</select>' +
-            '<button class="btn btn-ghost btn-sm" data-edit="' + t.id + '">Edit</button>' +
-            '<button class="btn btn-danger btn-sm" data-del="' + t.id + '">Delete</button>' +
-          '</div>' +
-        '</div>';
+  /* ---- Contests ---- */
+  function renderTours(body) {
+    var tours = Store.tournaments().slice().sort(function (a, b) { return (b.date + b.time).localeCompare(a.date + a.time); });
+    body.innerHTML = '<div class="admin-bar"><button class="btn btn-primary btn-sm" id="newT">＋ New Contest</button></div><div class="admin-list">' +
+      tours.map(function (t) {
+        return '<div class="arow"><div class="arow-main"><strong>' + esc(t.title) + '</strong>' +
+          '<div class="muted small">' + esc(t.type) + ' • ' + UI.fmtDate(t.date) + ' ' + esc(t.time) + ' • ' + Store.joinedCount(t.id) + '/' + t.maxTeams + ' • pool ' + coins(Store.livePool(t)) + '</div></div>' +
+          '<div class="arow-actions"><select class="mini-sel" data-st="' + t.id + '">' +
+            ['upcoming', 'live', 'completed'].map(function (s) { return '<option value="' + s + '"' + (t.status === s ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select>' +
+          '<button class="btn btn-ghost btn-sm" data-room="' + t.id + '">Room</button>' +
+          '<button class="btn btn-ghost btn-sm" data-edit="' + t.id + '">Edit</button>' +
+          '<button class="btn btn-danger btn-sm" data-del="' + t.id + '">✕</button></div></div>';
       }).join('') + '</div>';
-
-    body.querySelector('#newTour').addEventListener('click', function () { tourForm(null, body); });
-    body.querySelectorAll('[data-edit]').forEach(function (b) {
-      b.addEventListener('click', function () { tourForm(b.getAttribute('data-edit'), body); });
-    });
-    body.querySelectorAll('[data-del]').forEach(function (b) {
-      b.addEventListener('click', function () {
-        UI.confirm({ title: 'Delete tournament?', message: 'This cannot be undone.', danger: true, confirmLabel: 'Delete' })
-          .then(function (ok) {
-            if (!ok) return;
-            var id = b.getAttribute('data-del');
-            Store.saveTournaments(Store.tournaments().filter(function (t) { return t.id !== id; }));
-            UI.toast('Tournament deleted.', 'info');
-            renderTournaments(body);
-          });
-      });
-    });
-    body.querySelectorAll('[data-status]').forEach(function (sel) {
-      sel.addEventListener('change', function () {
-        var t = Store.tournamentById(sel.getAttribute('data-status'));
-        t.status = sel.value; Store.upsertTournament(t);
-        UI.toast('Status updated to ' + sel.value + '.', 'success');
-      });
-    });
+    body.querySelector('#newT').addEventListener('click', function () { tourForm(null, body); });
+    body.querySelectorAll('[data-edit]').forEach(function (b) { b.addEventListener('click', function () { tourForm(b.getAttribute('data-edit'), body); }); });
+    body.querySelectorAll('[data-room]').forEach(function (b) { b.addEventListener('click', function () { roomForm(b.getAttribute('data-room'), body); }); });
+    body.querySelectorAll('[data-del]').forEach(function (b) { b.addEventListener('click', function () {
+      UI.confirm({ title: 'Delete contest?', message: 'Removes it for everyone.', danger: true, confirmLabel: 'Delete' }).then(function (ok) {
+        if (!ok) return; Store.saveTournaments(Store.tournaments().filter(function (t) { return t.id !== b.getAttribute('data-del'); }));
+        UI.toast('Deleted.', 'info'); renderTours(body);
+      }); }); });
+    body.querySelectorAll('[data-st]').forEach(function (sel) { sel.addEventListener('change', function () {
+      var t = Store.tournamentById(sel.getAttribute('data-st')); t.status = sel.value; Store.upsertTournament(t); UI.toast('Status: ' + sel.value, 'success'); }); });
   }
 
   function tourForm(id, body) {
-    var t = id ? Store.tournamentById(id) : {
-      title: '', date: new Date(Date.now() + 86400000).toISOString().slice(0, 10), time: '20:00',
-      entryFee: 30, prizePool: 2000, maxTeams: 48, type: 'Solo', status: 'upcoming', map: 'Bermuda', rules: '',
-    };
-    var f = frag('' +
-      '<div class="tour-form">' +
-        '<div class="field"><label>Title</label><input id="f_title" value="' + esc(t.title) + '" /><span class="field-err"></span></div>' +
-        '<div class="form-row">' +
-          '<div class="field"><label>Date</label><input id="f_date" type="date" value="' + esc(t.date) + '" /></div>' +
-          '<div class="field"><label>Time</label><input id="f_time" type="time" value="' + esc(t.time) + '" /></div>' +
-        '</div>' +
-        '<div class="form-row">' +
-          '<div class="field"><label>Type</label><select id="f_type">' +
-            ['Solo', 'Duo', 'Squad'].map(function (x) { return '<option' + (t.type === x ? ' selected' : '') + '>' + x + '</option>'; }).join('') +
-          '</select></div>' +
-          '<div class="field"><label>Map</label><input id="f_map" value="' + esc(t.map || '') + '" /></div>' +
-        '</div>' +
-        '<div class="form-row">' +
-          '<div class="field"><label>Entry Fee (₹)</label><input id="f_fee" type="number" min="0" value="' + t.entryFee + '" /></div>' +
-          '<div class="field"><label>Prize Pool (₹)</label><input id="f_prize" type="number" min="0" value="' + t.prizePool + '" /></div>' +
-          '<div class="field"><label>Max Teams</label><input id="f_max" type="number" min="2" value="' + t.maxTeams + '" /></div>' +
-        '</div>' +
-        '<div class="field"><label>Status</label><select id="f_status">' +
-          ['upcoming', 'live', 'completed'].map(function (x) { return '<option' + (t.status === x ? ' selected' : '') + '>' + x + '</option>'; }).join('') +
-        '</select></div>' +
-        '<div class="field"><label>Rules</label><textarea id="f_rules" rows="3">' + esc(t.rules || '') + '</textarea></div>' +
-      '</div>');
-
-    UI.openModal({
-      title: id ? '✏️ Edit Tournament' : '＋ New Tournament',
-      node: f, size: 'lg',
-      actions: [
-        { label: 'Cancel', kind: 'ghost' },
-        { label: id ? 'Save Changes' : 'Create', kind: 'primary', onClick: function () {
-            var title = f.querySelector('#f_title').value.trim();
-            if (title.length < 3) { UI.fieldError(f.querySelector('#f_title'), 'Title too short.'); return true; }
-            var data = {
-              id: id || Store.uid('t'),
-              title: title,
-              date: f.querySelector('#f_date').value,
-              time: f.querySelector('#f_time').value,
-              type: f.querySelector('#f_type').value,
-              map: f.querySelector('#f_map').value.trim(),
-              entryFee: Math.max(0, Number(f.querySelector('#f_fee').value) || 0),
-              prizePool: Math.max(0, Number(f.querySelector('#f_prize').value) || 0),
-              maxTeams: Math.max(2, Number(f.querySelector('#f_max').value) || 2),
-              status: f.querySelector('#f_status').value,
-              rules: f.querySelector('#f_rules').value.trim(),
-              createdAt: (id && t.createdAt) || new Date().toISOString(),
-            };
-            Store.upsertTournament(data);
-            UI.closeModal();
-            UI.toast(id ? 'Tournament updated.' : 'Tournament created!', 'success');
-            renderTournaments(body);
-          } },
-      ],
-    });
+    var s = Store.settings();
+    var t = id ? Store.tournamentById(id) : { title: '', date: new Date(Date.now() + 86400000).toISOString().slice(0, 10), time: '21:00',
+      entryFee: 20, perKill: 0, maxTeams: 24, type: 'Solo', map: 'Bermuda', status: 'upcoming', poolMode: 'dynamic', guaranteedPool: 0, rules: '' };
+    var f = frag('<div class="tour-form">' +
+      '<div class="field"><label>Title</label><input id="f_title" value="' + esc(t.title) + '"/><span class="field-err"></span></div>' +
+      '<div class="form-row"><div class="field"><label>Date</label><input id="f_date" type="date" value="' + esc(t.date) + '"/></div>' +
+        '<div class="field"><label>Time</label><input id="f_time" type="time" value="' + esc(t.time) + '"/></div></div>' +
+      '<div class="form-row"><div class="field"><label>Type</label><select id="f_type">' + ['Solo', 'Duo', 'Squad'].map(function (x) { return '<option' + (t.type === x ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></div>' +
+        '<div class="field"><label>Map</label><input id="f_map" value="' + esc(t.map || '') + '"/></div></div>' +
+      '<div class="form-row"><div class="field"><label>Entry (coins)</label><input id="f_fee" type="number" min="0" value="' + t.entryFee + '"/></div>' +
+        '<div class="field"><label>Per Kill</label><input id="f_pk" type="number" min="0" value="' + (t.perKill || 0) + '"/></div>' +
+        '<div class="field"><label>Slots</label><input id="f_max" type="number" min="2" value="' + t.maxTeams + '"/></div></div>' +
+      '<div class="form-row"><div class="field"><label>Pool mode</label><select id="f_pmode">' +
+          '<option value="dynamic"' + (t.poolMode !== 'fixed' ? ' selected' : '') + '>Dynamic (80% of entries)</option>' +
+          '<option value="fixed"' + (t.poolMode === 'fixed' ? ' selected' : '') + '>Guaranteed fixed</option></select></div>' +
+        '<div class="field"><label>Fixed pool</label><input id="f_gpool" type="number" min="0" value="' + (t.guaranteedPool || 0) + '"/></div></div>' +
+      '<div class="form-row"><div class="field"><label>Commission % (blank=global ' + (s.commissionPercent || 20) + '%)</label><input id="f_comm" type="number" min="0" max="90" value="' + (typeof t.commissionOverride === 'number' ? t.commissionOverride : '') + '"/></div>' +
+        '<div class="field"><label>Status</label><select id="f_status">' + ['upcoming', 'live', 'completed'].map(function (x) { return '<option' + (t.status === x ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></div></div>' +
+      '<div class="field"><label>Rules</label><textarea id="f_rules" rows="3">' + esc(t.rules || '') + '</textarea></div></div>');
+    UI.openModal({ title: id ? 'Edit Contest' : 'New Contest', node: f, size: 'lg',
+      actions: [ { label: 'Cancel', kind: 'ghost' }, { label: id ? 'Save' : 'Create', kind: 'primary', onClick: function () {
+        var title = f.querySelector('#f_title').value.trim(); if (title.length < 3) { UI.fieldError(f.querySelector('#f_title'), 'Title too short.'); return true; }
+        var comm = f.querySelector('#f_comm').value;
+        var data = { id: id || Store.uid('t'), title: title, date: f.querySelector('#f_date').value, time: f.querySelector('#f_time').value,
+          type: f.querySelector('#f_type').value, map: f.querySelector('#f_map').value.trim(),
+          entryFee: Math.max(0, Number(f.querySelector('#f_fee').value) || 0), perKill: Math.max(0, Number(f.querySelector('#f_pk').value) || 0),
+          maxTeams: Math.max(2, Number(f.querySelector('#f_max').value) || 2), poolMode: f.querySelector('#f_pmode').value,
+          guaranteedPool: Math.max(0, Number(f.querySelector('#f_gpool').value) || 0),
+          commissionOverride: comm === '' ? undefined : Math.max(0, Math.min(90, Number(comm) || 0)),
+          status: f.querySelector('#f_status').value, rules: f.querySelector('#f_rules').value.trim(),
+          roomId: t.roomId, roomPass: t.roomPass, createdAt: (id && t.createdAt) || new Date().toISOString() };
+        Store.upsertTournament(data); UI.closeModal(); UI.toast(id ? 'Saved.' : 'Contest created!', 'success'); renderTours(body);
+      } } ] });
   }
 
-  /* ---- Result verification (auto prize distribution) ---- */
+  function roomForm(id, body) {
+    var t = Store.tournamentById(id);
+    var f = frag('<div class="tour-form"><p class="muted small">Players who joined see these ~before start.</p>' +
+      '<div class="field"><label>Room ID</label><input id="rmId" value="' + esc(t.roomId || '') + '" placeholder="e.g. 123456"/></div>' +
+      '<div class="field"><label>Room Password</label><input id="rmPw" value="' + esc(t.roomPass || '') + '" placeholder="e.g. ff123"/></div></div>');
+    UI.openModal({ title: '🎮 Match Room — ' + esc(t.title), node: f,
+      actions: [ { label: 'Cancel', kind: 'ghost' }, { label: 'Publish', kind: 'primary', onClick: function () {
+        t.roomId = f.querySelector('#rmId').value.trim(); t.roomPass = f.querySelector('#rmPw').value.trim(); Store.upsertTournament(t);
+        UI.closeModal(); UI.toast('Room details published.', 'success'); renderTours(body);
+      } } ] });
+  }
+
+  /* ---- Results (declare + auto payout) ---- */
   function renderResults(body) {
-    var matches = Store.matches().slice().sort(function (a, b) { return (a.verified === b.verified) ? 0 : a.verified ? 1 : -1; });
-    if (!matches.length) {
-      body.innerHTML = '<div class="empty glass"><span class="empty-ic">📸</span><p class="muted">No result submissions yet.</p></div>';
-      return;
+    var subs = Store.matches().slice().sort(function (a, b) { return (a.verified === b.verified) ? 0 : a.verified ? 1 : -1; });
+    body.innerHTML = '<div class="admin-bar"><button class="btn btn-primary btn-sm" id="declBtn">🏆 Declare Winners</button></div>';
+    if (!subs.length) { body.innerHTML += '<div class="empty"><span class="empty-ic">📸</span><p class="muted">No result submissions. Use “Declare Winners”.</p></div>'; }
+    else {
+      body.innerHTML += '<div class="admin-list">' + subs.map(function (m) {
+        var t = Store.tournamentById(m.tournamentId);
+        var prize = t ? (Store.rankPrize(t, m.rank) + (m.kills || 0) * (t.perKill || 0)) : 0;
+        return '<div class="arow">' + (m.screenshot ? '<img class="rthumb" src="' + m.screenshot + '" data-shot="' + m.id + '"/>' : '') +
+          '<div class="arow-main"><strong>' + esc(m.inGameName || 'Player') + '</strong> — ' + esc(t ? t.title : '?') +
+          '<div class="muted small">Rank #' + m.rank + ' • ' + (m.kills || 0) + ' kills • pays ' + coins(prize) + '</div></div>' +
+          '<div class="arow-actions">' + (m.verified ? '<span class="pill pill-live">Paid</span>' :
+            '<button class="btn btn-danger btn-sm" data-rej="' + m.id + '">✕</button><button class="btn btn-primary btn-sm" data-ver="' + m.id + '">Pay</button>') + '</div></div>';
+      }).join('') + '</div>';
     }
-    body.innerHTML = '<div class="admin-list">' + matches.map(function (m) {
-      var t = Store.tournamentById(m.tournamentId);
-      var submitter = Store.userById(m.submittedBy);
-      var prize = t ? prizeForPlacement(t, m.placement) : 0;
-      return '<div class="admin-row glass result-row">' +
-        (m.screenshot ? '<img class="result-thumb" src="' + m.screenshot + '" alt="result" data-shot="' + m.id + '" />' : '') +
-        '<div class="ar-main">' +
-          '<strong>' + esc(submitter ? submitter.username : m.team1) + '</strong> — ' + esc(t ? t.title : 'Unknown') +
-          '<div class="muted small">Placement: #' + (m.placement || '?') + ' • Kills: ' + (m.kills || 0) +
-            ' • Prize: ' + money(prize) + ' • ' + UI.fmtDateTime(m.createdAt) + '</div>' +
-        '</div>' +
-        '<div class="ar-actions">' +
-          (m.verified
-            ? '<span class="pill pill-live">✅ Verified</span>'
-            : '<button class="btn btn-danger btn-sm" data-reject="' + m.id + '">Reject</button>' +
-              '<button class="btn btn-primary btn-sm" data-verify="' + m.id + '">Verify & Pay</button>') +
-        '</div>' +
-      '</div>';
-    }).join('') + '</div>';
-
-    body.querySelectorAll('[data-shot]').forEach(function (img) {
-      img.addEventListener('click', function () {
-        UI.openModal({ title: 'Result Screenshot', bodyHTML: '<img src="' + img.src + '" style="width:100%;border-radius:12px" alt="result" />' });
-      });
-    });
-    body.querySelectorAll('[data-verify]').forEach(function (b) {
-      b.addEventListener('click', function () { verifyMatch(b.getAttribute('data-verify'), body); });
-    });
-    body.querySelectorAll('[data-reject]').forEach(function (b) {
-      b.addEventListener('click', function () {
-        UI.confirm({ title: 'Reject result?', message: 'The submission will be removed.', danger: true, confirmLabel: 'Reject' })
-          .then(function (ok) {
-            if (!ok) return;
-            var id = b.getAttribute('data-reject');
-            Store.saveMatches(Store.matches().filter(function (m) { return m.id !== id; }));
-            UI.toast('Result rejected.', 'info');
-            renderResults(body);
-          });
-      });
-    });
+    body.querySelector('#declBtn').addEventListener('click', function () { declareForm(body); });
+    body.querySelectorAll('[data-shot]').forEach(function (img) { img.addEventListener('click', function () { UI.openModal({ title: 'Screenshot', bodyHTML: '<img src="' + img.src + '" style="width:100%;border-radius:12px"/>' }); }); });
+    body.querySelectorAll('[data-ver]').forEach(function (b) { b.addEventListener('click', function () { payResult(b.getAttribute('data-ver'), body); }); });
+    body.querySelectorAll('[data-rej]').forEach(function (b) { b.addEventListener('click', function () {
+      UI.confirm({ title: 'Reject result?', danger: true, confirmLabel: 'Reject' }).then(function (ok) { if (!ok) return;
+        Store.saveMatches(Store.matches().filter(function (m) { return m.id !== b.getAttribute('data-rej'); })); UI.toast('Rejected.', 'info'); renderResults(body); }); }); });
   }
 
-  function prizeForPlacement(t, placement) {
-    if (placement === 1) return Math.round(t.prizePool * 0.5);
-    if (placement === 2) return Math.round(t.prizePool * 0.3);
-    if (placement === 3) return Math.round(t.prizePool * 0.2);
-    return 0;
+  function declareForm(body) {
+    var open = Store.tournaments();
+    var f = frag('<div class="tour-form">' +
+      '<div class="field"><label>Contest</label><select id="d_t">' + open.map(function (t) { return '<option value="' + t.id + '">' + esc(t.title) + '</option>'; }).join('') + '</select></div>' +
+      '<div id="d_rank"></div></div>');
+    function fillRanks() {
+      var t = Store.tournamentById(f.querySelector('#d_t').value);
+      var regs = Store.regsFor(t.id);
+      var opts = '<option value="">— player —</option>' + regs.map(function (r) { return '<option value="' + r.userId + '">' + esc(r.inGameName || r.teamName) + ' (slot ' + r.slotNo + ')</option>'; }).join('');
+      f.querySelector('#d_rank').innerHTML = ['🥇 1st', '🥈 2nd', '🥉 3rd'].map(function (lbl, i) {
+        return '<div class="form-row"><div class="field"><label>' + lbl + '</label><select class="d_win" data-rank="' + (i + 1) + '">' + opts + '</select></div>' +
+          '<div class="field"><label>Kills</label><input class="d_k" type="number" min="0" value="0"/></div></div>';
+      }).join('');
+    }
+    f.querySelector('#d_t').addEventListener('change', fillRanks); fillRanks();
+    UI.openModal({ title: '🏆 Declare Winners', node: f, size: 'lg',
+      actions: [ { label: 'Cancel', kind: 'ghost' }, { label: 'Pay Out', kind: 'primary', onClick: function () {
+        var t = Store.tournamentById(f.querySelector('#d_t').value);
+        var wins = f.querySelectorAll('.d_win'), ks = f.querySelectorAll('.d_k'); var any = false;
+        wins.forEach(function (sel, idx) {
+          var uidv = sel.value; if (!uidv) return; any = true;
+          var rank = Number(sel.getAttribute('data-rank')), kills = Number(ks[idx].value) || 0;
+          applyResult(t, uidv, rank, kills, null, true);
+        });
+        if (!any) { UI.toast('Pick at least one winner.', 'warn'); return true; }
+        t.status = 'completed'; Store.upsertTournament(t);
+        UI.closeModal(); UI.toast('Winners paid! 🪙', 'success'); renderResults(body); if (window.App) App.refreshChrome();
+      } } ] });
   }
 
-  function verifyMatch(id, body) {
-    var matches = Store.matches();
-    var m = matches.find(function (x) { return x.id === id; });
-    if (!m || m.verified) return;
+  function payResult(mid, body) {
+    var matches = Store.matches(); var m = matches.find(function (x) { return x.id === mid; }); if (!m || m.verified) return;
     var t = Store.tournamentById(m.tournamentId);
-    var prize = prizeForPlacement(t, m.placement);
-
-    UI.confirm({
-      title: 'Verify & distribute prize?',
-      message: 'This credits ' + money(prize) + ' to the player\'s wallet' + (m.placement === 1 ? ' and marks them as a tournament winner.' : '.'),
-      confirmLabel: 'Verify & Pay',
-    }).then(function (ok) {
+    var prize = Store.rankPrize(t, m.rank) + (m.kills || 0) * (t.perKill || 0);
+    UI.confirm({ title: 'Verify & pay?', message: 'Credit ' + UI.num(prize) + ' coins to ' + (m.inGameName || 'player') + '.', confirmLabel: 'Pay ' + UI.num(prize) }).then(function (ok) {
       if (!ok) return;
-      m.verified = true;
-      m.verifiedAt = new Date().toISOString();
-      Store.saveMatches(matches);
-
-      var player = Store.userById(m.submittedBy);
-      if (player) {
-        if (prize > 0) {
-          Store.credit(player.id, prize, 'Prize: ' + (t ? t.title : 'Tournament') + ' (#' + m.placement + ')');
-          player = Store.userById(player.id);
-          player.totalEarnings = Math.round((player.totalEarnings + prize) * 100) / 100;
-        }
-        player.matchesPlayed = (player.matchesPlayed || 0) + 1;
-        player.kills = (player.kills || 0) + (m.kills || 0);
-        player.deaths = (player.deaths || 0) + 1;
-        if (m.placement === 1) player.tournamentsWon = (player.tournamentsWon || 0) + 1;
-        Store.upsertUser(player);
-      }
-      UI.toast(prize > 0 ? money(prize) + ' paid out to ' + (player ? player.username : 'player') + '!' : 'Result verified.', 'success');
-      renderResults(body);
-      if (window.App) App.refreshChrome();
+      m.verified = true; m.verifiedAt = new Date().toISOString(); Store.saveMatches(matches);
+      applyResult(t, m.winnerUserId, m.rank, m.kills || 0, prize, false);
+      UI.toast(prize > 0 ? prize + ' coins paid! 🪙' : 'Verified.', 'success'); renderResults(body); if (window.App) App.refreshChrome();
     });
+  }
+
+  /* Credit prize + update player stats. */
+  function applyResult(t, userId, rank, kills, prizeOverride, createMatch) {
+    var prize = (typeof prizeOverride === 'number') ? prizeOverride : (Store.rankPrize(t, rank) + kills * (t.perKill || 0));
+    var pl = Store.userById(userId); if (!pl) return;
+    if (prize > 0) { Store.credit(userId, prize, 'Prize: ' + t.title + ' (#' + rank + ')', { kind: 'prize', tid: t.id, rank: rank });
+      pl = Store.userById(userId); pl.totalEarnings = Math.floor(pl.totalEarnings + prize); }
+    pl.matchesPlayed = (pl.matchesPlayed || 0) + 1; pl.kills = (pl.kills || 0) + kills; pl.deaths = (pl.deaths || 0) + 1;
+    if (rank === 1) pl.tournamentsWon = (pl.tournamentsWon || 0) + 1;
+    Store.upsertUser(pl);
+    if (createMatch) { var reg = Store.regsFor(t.id).find(function (r) { return r.userId === userId; });
+      var mm = Store.matches(); mm.push({ id: Store.uid('m'), tournamentId: t.id, rank: rank, kills: kills, winnerUserId: userId,
+        inGameName: reg ? reg.inGameName : pl.username, screenshot: null, verified: true, createdAt: new Date().toISOString() }); Store.saveMatches(mm); }
   }
 
   /* ---- Withdrawals ---- */
   function renderWithdrawals(body) {
     var wds = Store.transactions().filter(function (t) { return t.meta && t.meta.kind === 'withdrawal'; });
-    if (!wds.length) {
-      body.innerHTML = '<div class="empty glass"><span class="empty-ic">💸</span><p class="muted">No withdrawal requests.</p></div>';
-      return;
-    }
+    if (!wds.length) { body.innerHTML = '<div class="empty"><span class="empty-ic">💸</span><p class="muted">No withdrawal requests.</p></div>'; return; }
     body.innerHTML = '<div class="admin-list">' + wds.map(function (w) {
-      var user = Store.userById(w.userId);
-      return '<div class="admin-row glass">' +
-        '<div class="ar-main"><strong>' + money(w.amount) + '</strong> → ' + esc(w.meta.upi) +
-          '<div class="muted small">' + esc(user ? user.username : 'user') + ' • ' + UI.fmtDateTime(w.date) + '</div></div>' +
-        '<div class="ar-actions">' +
-          (w.status === 'pending'
-            ? '<button class="btn btn-danger btn-sm" data-wreject="' + w.id + '">Reject</button>' +
-              '<button class="btn btn-primary btn-sm" data-wapprove="' + w.id + '">Approve Payout</button>'
-            : '<span class="pill pill-' + (w.status === 'success' ? 'live' : 'completed') + '">' + w.status + '</span>') +
-        '</div>' +
-      '</div>';
+      var u = Store.userById(w.userId);
+      return '<div class="arow"><div class="arow-main"><strong>' + coins(w.amount) + '</strong> → ' + esc(w.meta.upi) +
+        '<div class="muted small">' + esc(u ? u.username : 'user') + ' • ' + UI.fmtDateTime(w.date) + '</div></div>' +
+        '<div class="arow-actions">' + (w.status === 'pending' ? '<button class="btn btn-danger btn-sm" data-wr="' + w.id + '">Reject</button><button class="btn btn-primary btn-sm" data-wa="' + w.id + '">Approve</button>' :
+          '<span class="pill pill-' + (w.status === 'success' ? 'live' : 'done') + '">' + w.status + '</span>') + '</div></div>';
     }).join('') + '</div>';
-
-    body.querySelectorAll('[data-wapprove]').forEach(function (b) {
-      b.addEventListener('click', function () { resolveWithdrawal(b.getAttribute('data-wapprove'), true, body); });
-    });
-    body.querySelectorAll('[data-wreject]').forEach(function (b) {
-      b.addEventListener('click', function () { resolveWithdrawal(b.getAttribute('data-wreject'), false, body); });
-    });
+    body.querySelectorAll('[data-wa]').forEach(function (b) { b.addEventListener('click', function () { resolveWd(b.getAttribute('data-wa'), true, body); }); });
+    body.querySelectorAll('[data-wr]').forEach(function (b) { b.addEventListener('click', function () { resolveWd(b.getAttribute('data-wr'), false, body); }); });
   }
-
-  function resolveWithdrawal(txId, approve, body) {
-    UI.confirm({
-      title: approve ? 'Approve payout?' : 'Reject withdrawal?',
-      message: approve ? 'Mark this UPI payout as completed.' : 'The held amount will be refunded to the user\'s wallet.',
-      danger: !approve,
-      confirmLabel: approve ? 'Approve' : 'Reject & Refund',
-    }).then(function (ok) {
-      if (!ok) return;
-      var txns = Store.transactions();
-      var tx = txns.find(function (x) { return x.id === txId; });
-      if (!tx || tx.status !== 'pending') return;
-      if (approve) {
-        tx.status = 'success';
-        Store.saveTransactions(txns);
-        UI.toast('Payout approved.', 'success');
-      } else {
-        tx.status = 'failed';
-        Store.saveTransactions(txns);
-        // refund held funds
-        Store.credit(tx.userId, tx.amount, 'Refund: withdrawal rejected');
-        UI.toast('Withdrawal rejected and refunded.', 'info');
-      }
+  function resolveWd(id, approve, body) {
+    UI.confirm({ title: approve ? 'Approve payout?' : 'Reject & refund?', danger: !approve, confirmLabel: approve ? 'Approve' : 'Reject' }).then(function (ok) {
+      if (!ok) return; var txns = Store.transactions(); var tx = txns.find(function (x) { return x.id === id; }); if (!tx || tx.status !== 'pending') return;
+      if (approve) { tx.status = 'success'; Store.saveTransactions(txns); UI.toast('Payout approved.', 'success'); }
+      else { tx.status = 'failed'; Store.saveTransactions(txns); Store.credit(tx.userId, tx.amount, 'Refund: withdrawal rejected', { kind: 'refund' }); UI.toast('Rejected & refunded.', 'info'); }
       renderWithdrawals(body);
     });
   }
 
   /* ---- Users ---- */
   function renderUsers(body) {
-    var users = Store.users();
-    body.innerHTML = '<div class="admin-list">' + users.map(function (u) {
-      return '<div class="admin-row glass">' +
-        '<div class="lb-av">' + esc(u.username.slice(0, 1).toUpperCase()) + '</div>' +
-        '<div class="ar-main"><strong>' + esc(u.username) + '</strong> ' +
-          (u.role === 'admin' ? '<span class="pill pill-live">admin</span>' : '') +
-          '<div class="muted small">📱 ' + esc(u.mobile) + ' • UID ' + esc(u.freeFireUID) +
-            ' • Bal ' + money(u.balance) + ' • 🏆 ' + u.tournamentsWon + '</div></div>' +
-        '<div class="ar-actions">' +
-          '<button class="btn btn-ghost btn-sm" data-credit="' + u.id + '">Adjust ₹</button>' +
-        '</div>' +
-      '</div>';
+    body.innerHTML = '<div class="admin-list">' + Store.users().map(function (u) {
+      return '<div class="arow"><span class="lb-av">' + esc(u.username.slice(0, 1).toUpperCase()) + '</span>' +
+        '<div class="arow-main"><strong>' + esc(u.username) + '</strong> ' + (u.role === 'admin' ? '<span class="pill pill-live">admin</span>' : '') +
+        '<div class="muted small">📱 ' + esc(u.mobile) + ' • UID ' + esc(u.freeFireUID) + ' • bal ' + coins(u.balance) + ' • 🏆 ' + u.tournamentsWon + '</div></div>' +
+        '<div class="arow-actions"><button class="btn btn-ghost btn-sm" data-adj="' + u.id + '">± Coins</button></div></div>';
     }).join('') + '</div>';
-
-    body.querySelectorAll('[data-credit]').forEach(function (b) {
-      b.addEventListener('click', function () { adjustBalance(b.getAttribute('data-credit'), body); });
-    });
+    body.querySelectorAll('[data-adj]').forEach(function (b) { b.addEventListener('click', function () { adjust(b.getAttribute('data-adj'), body); }); });
+  }
+  function adjust(uid, body) {
+    var u = Store.userById(uid);
+    var f = frag('<div class="money-form"><div class="reg-bal">' + esc(u.username) + ' — ' + coins(u.balance) + '</div>' +
+      '<div class="field"><label>Coins (negative to deduct)</label><input id="aj" type="number" placeholder="e.g. 100 or -50"/><span class="field-err"></span></div>' +
+      '<div class="field"><label>Note</label><input id="ajn" value="Admin adjustment"/></div></div>');
+    UI.openModal({ title: 'Adjust Coins', node: f, actions: [ { label: 'Cancel', kind: 'ghost' }, { label: 'Apply', kind: 'primary', onClick: function () {
+      var amt = Number(f.querySelector('#aj').value); if (!amt) { UI.fieldError(f.querySelector('#aj'), 'Non-zero amount.'); return true; }
+      var note = f.querySelector('#ajn').value.trim() || 'Admin adjustment';
+      if (amt > 0) Store.credit(uid, amt, note, { kind: 'admin' });
+      else { var user = Store.userById(uid); if (user.balance + amt < 0) { UI.fieldError(f.querySelector('#aj'), 'Would go negative.'); return true; } Store.debit(uid, -amt, note, { kind: 'admin' }); }
+      UI.closeModal(); UI.toast('Balance adjusted.', 'success'); renderUsers(body); if (window.App) App.refreshChrome();
+    } } ] });
   }
 
-  function adjustBalance(userId, body) {
-    var u = Store.userById(userId);
-    var f = frag('' +
-      '<div class="money-form">' +
-        '<div class="reg-wallet">' + esc(u.username) + ' — current: <strong>' + money(u.balance) + '</strong></div>' +
-        '<div class="field"><label>Amount (use negative to deduct)</label><input id="adjAmt" type="number" placeholder="e.g. 100 or -50" /><span class="field-err"></span></div>' +
-        '<div class="field"><label>Note</label><input id="adjNote" type="text" placeholder="Reason" value="Admin adjustment" /></div>' +
-      '</div>');
-    UI.openModal({
-      title: 'Adjust Balance', node: f,
-      actions: [
-        { label: 'Cancel', kind: 'ghost' },
-        { label: 'Apply', kind: 'primary', onClick: function () {
-            var amt = Number(f.querySelector('#adjAmt').value);
-            if (!amt) { UI.fieldError(f.querySelector('#adjAmt'), 'Enter a non-zero amount.'); return true; }
-            var note = f.querySelector('#adjNote').value.trim() || 'Admin adjustment';
-            if (amt > 0) Store.credit(userId, amt, note);
-            else {
-              var user = Store.userById(userId);
-              if (user.balance + amt < 0) { UI.fieldError(f.querySelector('#adjAmt'), 'Would make balance negative.'); return true; }
-              Store.debit(userId, -amt, note);
-            }
-            UI.closeModal();
-            UI.toast('Balance adjusted.', 'success');
-            renderUsers(body);
-            if (window.App) App.refreshChrome();
-          } },
-      ],
+  /* ---- Settings ---- */
+  function renderSettings(body) {
+    var s = Store.settings();
+    body.innerHTML = '<div class="tour-form settings-form">' +
+      '<div class="form-row"><div class="field"><label>Platform commission %</label><input id="s_comm" type="number" min="0" max="90" value="' + (s.commissionPercent || 20) + '"/></div>' +
+        '<div class="field"><label>₹ per Coin</label><input id="s_rate" type="number" min="0.01" step="0.01" value="' + (s.coinPerRupee || 1) + '"/></div></div>' +
+      '<div class="form-row"><div class="field"><label>1st %</label><input id="s_p1" type="number" value="' + ((s.split && s.split.first) || 50) + '"/></div>' +
+        '<div class="field"><label>2nd %</label><input id="s_p2" type="number" value="' + ((s.split && s.split.second) || 30) + '"/></div>' +
+        '<div class="field"><label>3rd %</label><input id="s_p3" type="number" value="' + ((s.split && s.split.third) || 20) + '"/></div></div>' +
+      '<div class="form-row"><div class="field"><label>Min add (₹)</label><input id="s_mina" type="number" value="' + (s.minAdd || 10) + '"/></div>' +
+        '<div class="field"><label>Min withdraw (coins)</label><input id="s_minw" type="number" value="' + (s.minWithdraw || 50) + '"/></div></div>' +
+      '<div class="form-row"><div class="field"><label>Support mobile</label><input id="s_sup" value="' + esc(s.supportMobile || '') + '"/></div>' +
+        '<div class="field"><label>Signup bonus (coins)</label><input id="s_bonus" type="number" value="' + (s.signupBonus || 0) + '"/></div></div>' +
+      '<div class="form-row"><div class="field"><label>Admin mobile</label><input id="s_amob" value="' + esc(s.adminMobile || '') + '"/></div>' +
+        '<div class="field"><label>Admin password</label><input id="s_apw" value="' + esc(s.adminPassword || '') + '"/></div></div>' +
+      '<button class="btn btn-primary btn-block" id="saveS">💾 Save Settings</button>' +
+      '<button class="btn btn-danger btn-block" id="resetAll" style="margin-top:10px">⚠️ Reset ALL data (demo)</button>' +
+    '</div>';
+    body.querySelector('#saveS').addEventListener('click', function () {
+      var p1 = Number(body.querySelector('#s_p1').value) || 0, p2 = Number(body.querySelector('#s_p2').value) || 0, p3 = Number(body.querySelector('#s_p3').value) || 0;
+      if (p1 + p2 + p3 > 100) { UI.toast('Prize split can’t exceed 100%.', 'warn'); return; }
+      var ns = Object.assign({}, s, {
+        commissionPercent: Math.max(0, Math.min(90, Number(body.querySelector('#s_comm').value) || 0)),
+        coinPerRupee: Math.max(0.01, Number(body.querySelector('#s_rate').value) || 1),
+        split: { first: p1, second: p2, third: p3 },
+        minAdd: Math.max(1, Number(body.querySelector('#s_mina').value) || 10),
+        minWithdraw: Math.max(1, Number(body.querySelector('#s_minw').value) || 50),
+        supportMobile: body.querySelector('#s_sup').value.trim(),
+        signupBonus: Math.max(0, Number(body.querySelector('#s_bonus').value) || 0),
+        adminMobile: body.querySelector('#s_amob').value.trim(),
+        adminPassword: body.querySelector('#s_apw').value.trim() || s.adminPassword,
+      });
+      Store.saveSettings(ns); Store.ensureAdmin(); UI.toast('Settings saved.', 'success'); if (window.App) App.refreshChrome();
+    });
+    body.querySelector('#resetAll').addEventListener('click', function () {
+      UI.confirm({ title: 'Reset everything?', message: 'Wipes all users, contests, wallets. Cannot be undone.', danger: true, confirmLabel: 'Reset' }).then(function (ok) {
+        if (!ok) return; Store.resetAll(); sessionStorage.clear(); UI.toast('All data reset.', 'info'); location.hash = '#/'; location.reload();
+      });
     });
   }
 
