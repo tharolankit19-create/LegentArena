@@ -1,5 +1,5 @@
 /* =========================================================================
- * LegentArena — App bootstrap + hash router + nav chrome
+ * LegentArena — App shell: hash router, bottom nav, live countdowns
  * ======================================================================= */
 (function () {
   'use strict';
@@ -7,22 +7,26 @@
   var appEl = document.getElementById('app');
 
   var routes = {
-    '': Pages.landing,
-    'tournaments': Pages.tournaments,
-    'leaderboard': Pages.leaderboard,
-    'my-tournaments': Pages.myTournaments,
+    '': Pages.home,
+    'contest': function (id) { return Pages.contestDetail(id); },
+    'joinings': function (id) { return Pages.joinings(id); },
+    'my-contests': Pages.myContests,
     'wallet': Pages.wallet,
-    'profile': Pages.profile,
+    'leaderboard': Pages.leaderboard,
+    'menu': Pages.menu,
+    'statistics': Pages.statistics,
+    'how': Pages.howItWorks,
+    'faq': Pages.faq,
+    'contact': Pages.contact,
+    'about': Pages.about,
+    'legal': Pages.legal,
     'login': Pages.loginPage,
     'register': Pages.registerPage,
     'admin': function () { return Admin.panel(); },
-    'tournament': function (id) { return Pages.tournamentDetail(id); },
-    'brackets': function (id) { return Pages.brackets(id); },
   };
 
   function parseHash() {
-    var raw = (location.hash || '#/').replace(/^#\/?/, '');
-    raw = raw.split('?')[0];
+    var raw = (location.hash || '#/').replace(/^#\/?/, '').split('?')[0];
     var parts = raw.split('/').filter(Boolean);
     return { name: parts[0] || '', param: parts[1] || null };
   }
@@ -30,99 +34,60 @@
   function route() {
     var r = parseHash();
     var handler = routes[r.name];
-    if (!handler) {
-      appEl.innerHTML = '<section class="section"><div class="empty glass"><span class="empty-ic">🚫</span><h2>Page not found</h2><a href="#/" class="btn btn-primary btn-sm">Go home</a></div></section>';
-      return;
-    }
     var node;
-    try {
-      node = handler(r.param);
-    } catch (e) {
-      console.error('Route render error:', e);
-      appEl.innerHTML = '<section class="section"><div class="empty glass"><p>Something went wrong rendering this page.</p></div></section>';
-      return;
-    }
+    if (!handler) node = notFound();
+    else { try { node = handler(r.param); } catch (e) { console.error('render error', e); node = errorScreen(); } }
     appEl.innerHTML = '';
     if (node) appEl.appendChild(node);
-    window.scrollTo({ top: 0, behavior: 'auto' });
-    updateActiveNav(r.name);
-    closeMobileMenu();
+    window.scrollTo(0, 0);
+    updateNav(r.name);
+    tickCountdowns();
   }
 
-  function updateActiveNav(name) {
-    document.querySelectorAll('[data-nav]').forEach(function (a) {
-      var target = (a.getAttribute('href') || '').replace(/^#\/?/, '').split('/')[0];
-      a.classList.toggle('active', target === name);
-    });
+  function notFound() {
+    return UI.screen({ title: 'Not found', backTo: '#/', html: '<div class="empty"><span class="empty-ic">🚫</span><h3>Page not found</h3><a href="#/" class="btn btn-primary btn-sm">Go Home</a></div>' });
+  }
+  function errorScreen() {
+    return UI.screen({ title: 'Error', backTo: '#/', html: '<div class="empty"><span class="empty-ic">😵</span><p class="muted">Something went wrong rendering this page.</p></div>' });
   }
 
-  /* ---- Nav chrome reflects auth state ---- */
+  function updateNav(name) {
+    var map = { '': 'home', 'contest': 'home', 'my-contests': 'mine', 'wallet': 'wallet', 'leaderboard': 'ranks', 'menu': 'menu', 'statistics': 'menu', 'admin': 'menu', 'how': 'menu', 'faq': 'menu', 'contact': 'menu', 'about': 'menu', 'legal': 'menu' };
+    var active = map[name] || '';
+    document.querySelectorAll('#tabbar a').forEach(function (a) { a.classList.toggle('active', a.getAttribute('data-tab') === active); });
+  }
+
   function refreshChrome() {
     var user = Auth.current();
-    var actions = document.getElementById('navActions');
-
-    // Toggle auth-only / admin-only links visibility.
-    document.querySelectorAll('[data-auth]').forEach(function (n) { n.style.display = user ? '' : 'none'; });
-    document.querySelectorAll('[data-admin]').forEach(function (n) { n.style.display = (user && user.role === 'admin') ? '' : 'none'; });
-
-    if (user) {
-      actions.innerHTML = '' +
-        '<a href="#/wallet" class="nav-wallet" title="Wallet">💰 ' + UI.money(user.balance) + '</a>' +
-        '<a href="#/profile" class="nav-user"><span class="nav-av">' + UI.esc(user.username.slice(0, 1).toUpperCase()) + '</span>' +
-          '<span class="nav-uname">' + UI.esc(user.username) + '</span></a>' +
-        '<button class="btn btn-ghost btn-sm" id="logoutBtn">Logout</button>';
-      var lb = document.getElementById('logoutBtn');
-      if (lb) lb.addEventListener('click', function () {
-        Auth.logout();
-        sessionStorage.removeItem('ffth_admin_ok');
-        UI.toast('Logged out.', 'info');
-        location.hash = '#/';
-        refreshChrome();
-      });
-    } else {
-      actions.innerHTML = '' +
-        '<a href="#/login" class="btn btn-ghost btn-sm">Login</a>' +
-        '<a href="#/register" class="btn btn-primary btn-sm">Sign Up</a>';
-    }
+    var wt = document.querySelector('#tabbar [data-tab="wallet"] .tb-badge');
+    if (wt) wt.textContent = user ? UI.num(user.balance) : '';
+    if (wt) wt.style.display = user ? '' : 'none';
   }
 
-  /* ---- Mobile menu ---- */
-  function toggleMobileMenu() {
-    var links = document.getElementById('navLinks');
-    var ham = document.getElementById('hamburger');
-    var open = links.classList.toggle('open');
-    ham.classList.toggle('open', open);
-    ham.setAttribute('aria-expanded', open ? 'true' : 'false');
-  }
-  function closeMobileMenu() {
-    var links = document.getElementById('navLinks');
-    var ham = document.getElementById('hamburger');
-    if (links) links.classList.remove('open');
-    if (ham) { ham.classList.remove('open'); ham.setAttribute('aria-expanded', 'false'); }
-  }
-
-  /* ---- Nav shadow on scroll ---- */
-  function onScroll() {
-    var nav = document.getElementById('nav');
-    if (window.scrollY > 8) nav.classList.add('scrolled'); else nav.classList.remove('scrolled');
+  /* ---- Live countdown updater ---- */
+  function tickCountdowns() {
+    var now = Date.now();
+    document.querySelectorAll('[data-deadline]').forEach(function (el) {
+      var target = new Date(el.getAttribute('data-deadline')).getTime();
+      if (isNaN(target)) { el.textContent = ''; return; }
+      var diff = target - now;
+      if (diff <= 0) { el.textContent = '⏱ Starting'; el.classList.add('soon'); return; }
+      var d = Math.floor(diff / 86400000), h = Math.floor((diff % 86400000) / 3600000), m = Math.floor((diff % 3600000) / 60000), s = Math.floor((diff % 60000) / 1000);
+      var txt = d > 0 ? (d + 'd ' + h + 'h') : h > 0 ? (h + 'h ' + m + 'm') : (m + 'm ' + s + 's');
+      el.textContent = '⏱ ' + txt;
+      if (diff < 3600000) el.classList.add('soon');
+    });
   }
 
   function init() {
     Store.seed();
-    document.getElementById('hamburger').addEventListener('click', toggleMobileMenu);
-    document.getElementById('navLinks').addEventListener('click', function (e) {
-      if (e.target.tagName === 'A') closeMobileMenu();
-    });
     window.addEventListener('hashchange', route);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    onScroll();
+    setInterval(tickCountdowns, 1000);
     refreshChrome();
     if (!location.hash) location.hash = '#/';
     route();
   }
 
-  window.App = { route: route, refreshChrome: refreshChrome };
-
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-  else init();
+  window.App = { route: route, refreshChrome: refreshChrome, tickCountdowns: tickCountdowns };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
