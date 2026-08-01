@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1" />
+  <meta name="theme-color" content="#0a1428" />
+  <meta name="description" content="LegentArena — play Free Fire Solo, Duo & Squad contests, win real cash to your wallet, withdraw to UPI." />
+  <title>LegentArena • Free Fire Contests</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/css/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>" />
+</head>
+<body>
+  <div class="phone">
+    <!-- Router mounts screens here -->
+    <main id="app" role="main"></main>
+
+    <!-- Bottom navigation -->
+    <nav class="tabbar" id="tabbar" aria-label="Primary">
+      <a href="#/" data-tab="home"><span class="tb-ic">🏠</span><span class="tb-l">Home</span></a>
+      <a href="#/my-contests" data-tab="mine"><span class="tb-ic">🎟️</span><span class="tb-l">My Contests</span></a>
+      <a href="#/wallet" data-tab="wallet"><span class="tb-ic">🪙</span><span class="tb-badge"></span><span class="tb-l">Wallet</span></a>
+      <a href="#/leaderboard" data-tab="ranks"><span class="tb-ic">🏆</span><span class="tb-l">Ranks</span></a>
+      <a href="#/menu" data-tab="menu"><span class="tb-ic">☰</span><span class="tb-l">Menu</span></a>
+    </nav>
+  </div>
+
+  <div id="modalRoot"></div>
+  <div id="toastRoot" class="toast-root" aria-live="polite"></div>
+
+  <script src="assets/js/config.js"></script>
+  <script src="assets/js/store.js"></script>
+  <script src="assets/js/ui.js"></script>
+  <script src="assets/js/auth.js"></script>
+  <script src="assets/js/payments.js"></script>
+  <script src="assets/js/pages.js"></script>
+  <script src="assets/js/admin.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

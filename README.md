@@ -1,107 +1,147 @@
-# 🔥 LegentArena — Free Fire Contest App
+# 📘 PadhAI — JEE Main की तैयारी, हिंदी में
 
-A **mobile-first Free Fire tournament app** for Indian gamers. Players join daily
-Solo / Duo / Squad contests, pay entry using **Coins**, get a slot, play the match,
-submit their result, and receive **winnings straight to their wallet** — withdrawable
-to UPI. Runs entirely in the browser on **localStorage** (no backend needed), and every
-money figure is **computed from real records** (no hardcoded/fake numbers).
+एक **वेब ऐप** जो हिंदी माध्यम के JEE Main विद्यार्थी के लिए बना है। आप अपने
+**लेक्चर, DPP, मॉड्यूल, PYQ और टेस्ट** ट्रैक करते हैं, अपनी किताबें/DPP अपलोड करते हैं,
+और ऐप रोज़ बताता है **आज क्या पढ़ना है और क्यों**। हर आँकड़ा आपके अपने रिकॉर्ड से
+गिना जाता है — कोई नकली नंबर नहीं।
 
-> Independent fan project. Not affiliated with, endorsed by, or sponsored by Garena / Free Fire.
-> 🔞 18+ · skill-based · play responsibly · not for use where prohibited by law.
+सफ़ेद (white) थीम · मोबाइल + डेस्कटॉप · डेटा **Supabase** में, पूरी तरह आपके खाते तक सीमित।
 
-## 💰 How the economy works (all admin-editable)
+---
 
-- **Coins** are the in-app currency. `1 Coin = ₹1` by default (legal-safety wrapper —
-  the wallet shows Coins, not cash). Add money via UPI → Coins; withdraw Coins → UPI.
-- **Prize pool is dynamic and real:** `pool = (players joined × entry fee) − commission`.
-  Default commission (**your profit**) is **20%**, editable in **Admin → Settings**
-  (globally, or per-contest). The pool visibly **grows as slots fill** (FOMO).
-- **Winnings split:** 1st **50%**, 2nd **30%**, 3rd **20%** of the distributable pool,
-  plus optional **per-kill** bonus. All editable in Settings.
-- **Automatic payout:** when the admin declares/verifies a result, winnings are credited
-  to the player's wallet instantly and their stats update.
+## चैप्टर "पूरा" कब माना जाता है
 
-Example: 40 players × ₹30 entry = ₹1,200 collected → 20% (₹240) is your profit →
-₹960 prize pool → 1st ₹480, 2nd ₹288, 3rd ₹192.
+पाँच स्टेप — पाँचों हो जाएँ तभी चैप्टर डन:
 
-## ✨ Features
+| स्टेप | शर्त |
+|---|---|
+| 🎥 लेक्चर | पूरा लेक्चर देखा |
+| 📝 DPP | सारे DPP हल किए |
+| 📘 मॉड्यूल | मॉड्यूल के प्रश्न पूरे |
+| 🎯 PYQ | **100 PYQ** हल किए (संख्या बदली जा सकती है) |
+| 🏁 टेस्ट | चैप्टर टेस्ट में **60%+** |
 
-- **Home** — hero, real FOMO strip (coins paid to players, open/live contests), search +
-  Solo/Duo/Squad filters, live contest cards with **rising prize pool**, **live countdowns**,
-  and **"only N slots left"** urgency.
-- **Contest detail** — big live pool, info tiles, hot slot bar, winnings breakdown, rules,
-  match Room ID/password (for joined players), sticky Join bar.
-- **Registration** — captures In-Game Name + Free Fire UID, assigns a **slot number**,
-  pays entry from Coins (or nudges to add Coins).
-- **All Joinings** — Slot / Pos / In-Game Name / Game ID table (like popular tourney apps).
-- **Wallet** — Coin balance, add Coins (simulated Razorpay), withdraw to UPI, full history.
-- **Leaderboard** — Weekly / Monthly / Fulltime, ranked by real winnings, animated podium.
-- **My Contests, Statistics, Menu** — profile, K/D, earnings, How-it-works, FAQ, Contact, Legal.
-- **Admin panel** (mobile `8955005076`) — Settings (commission, coin rate, split, mins,
-  support no.), contest CRUD, publish Room ID/password, **declare winners → auto payout**,
-  approve/reject withdrawals, manage users & balances, reset demo data.
-- **Design** — navy + electric-blue + gold-coin theme, app-shell with bottom tab bar,
-  smooth animations. Premium and FOMO-driven, but clear enough for first-time users.
+PYQ आंशिक रूप से भी गिने जाते हैं, इसलिए 40 PYQ पर बार आगे बढ़ता दिखता है।
+प्रैक्टिस सेशन में हल किए प्रश्न अपने-आप उस चैप्टर की PYQ गिनती में जुड़ते हैं।
 
-## 🚀 Run it
+## AI विश्लेषण (सब कुछ आपके डेटा से गणना होता है)
 
-Static site, no build step:
+- **प्राथमिकता** — `वेटेज × बचा हुआ हिस्सा × आसानी` से हर चैप्टर का स्कोर बनता है,
+  और सबसे ऊपर वाला चैप्टर "अगला यह करें" के रूप में दिखता है।
+- **रफ़्तार** — बचे दिन बनाम बचे चैप्टर से निकलता है कि हर हफ़्ते कितने चैप्टर चाहिए,
+  और पिछले 28 दिनों में आपने असल में कितने पूरे किए।
+- **रिवीज़न** — पूरा हुआ चैप्टर 1, 3, 7, 21, 45 दिन बाद दोबारा due होता है।
+- **कमज़ोर चैप्टर** — प्रैक्टिस के असली प्रयासों से चैप्टर-वार सटीकता निकलती है (60% से कम = कमज़ोर)।
+- **छोटे चैप्टर** — कम समय में पूरे मार्क्स वाले चैप्टर अलग से दिखते हैं।
+- **सबसे महँगे गैप** — हाई वेटेज लेकिन कम तैयारी वाले चैप्टर एक टेबल में।
+
+### वेटेज का स्रोत
+
+चैप्टर का वेटेज **JEE Main 2021–2026 के अध्याय-वार विश्लेषण** से लिया गया है और ऐप में
+उसका स्रोत साफ़ लिखा दिखता है (जैसे *आधुनिक भौतिकी — ~2.63 प्रश्न/पेपर, 2021–26 में कुल 344*)।
+जिन चैप्टरों का सत्यापित आँकड़ा उपलब्ध नहीं है, वहाँ **"वेटेज डेटा नहीं"** लिखा आता है —
+कोई अनुमानित संख्या गढ़ी नहीं गई। रैंकिंग में ऐसे चैप्टर विषय के माध्यक (median) वेटेज पर चलते हैं।
+
+## प्रैक्टिस
+
+- विषय → **कई चैप्टर** → **कई टॉपिक** चुनें (टॉपिक न चुनें तो पूरा चैप्टर)
+- **साल** चुनें (किसी भी साल के PYQ) · **आसान → कठिन** क्रम, या सिर्फ़ आसान/मध्यम/कठिन
+- 10 / 20 / 30 / 50 प्रश्न · टाइमर · प्रश्न सूची · हल के साथ पूरा रिव्यू
+- JEE अंकन (+4 / −1), चैप्टर-वार सटीकता, और हर प्रश्न का हल
+
+### अपने PYQ जोड़ना
+
+ऐप के साथ एक **अभ्यास बैंक** पहले से आता है ताकि पहले दिन से प्रैक्टिस चले —
+**110 प्रश्न** (भौतिकी 37, रसायन 35, गणित 38), 63 में से 61 चैप्टर कवर, हर प्रश्न का हल साथ।
+ये असली पिछले पेपर होने का दावा नहीं करते, इसलिए इनका `year` खाली है और कठिनाई
+आसान/मध्यम तक सीमित है।
+
+**साल-वार PYQ** के लिए अपने प्रश्न इम्पोर्ट करें: **प्रैक्टिस → ➕ अपने प्रश्न जोड़ें**
+
+```json
+[{
+  "chapter_id": "phy_modern",
+  "topic_id": "phy_modern__1",
+  "year": 2024,
+  "difficulty": "easy",
+  "q_type": "mcq",
+  "question_hi": "…प्रश्न हिंदी में…",
+  "options": [{"key":"A","hi":"1.1 eV"},{"key":"B","hi":"3.1 eV"}],
+  "answer": "A",
+  "solution_hi": "E = 1240/400 = 3.1 eV; KEmax = 3.1 − 2 = 1.1 eV"
+}]
+```
+
+`q_type: "numeric"` भी चलता है (उत्तर में 1% तक की छूट मिलती है)। `chapter_id` की सूची
+`assets/js/syllabus.js` में है।
+
+## सामग्री (Resources)
+
+किताबें, DPP, मॉड्यूल, BIQ, PYQ पेपर, नोट्स — 50 MB तक की फ़ाइलें अपलोड करें।
+फ़ाइलें Supabase Storage की **निजी** बकेट में जाती हैं और सिर्फ़ आपके लिए signed URL से खुलती हैं।
+चैप्टर से जुड़ी फ़ाइल उस चैप्टर के पेज पर भी दिखती है।
+
+---
+
+## चलाना
+
+स्टैटिक साइट है, कोई बिल्ड स्टेप नहीं:
 
 ```bash
-open index.html                 # or double-click
-# or serve (recommended):
-python3 -m http.server 8080     # http://localhost:8080
+python3 -m http.server 8080      # http://localhost:8080
 ```
 
-Deploy the folder to any static host (Vercel, Netlify, GitHub Pages, Cloudflare Pages).
+किसी भी स्टैटिक होस्ट (Vercel / Netlify / GitHub Pages / Cloudflare Pages) पर डाल सकते हैं।
+पहली बार खाता बनाएँ → डैशबोर्ड खुल जाएगा।
 
-## 🔑 Demo logins
+## Supabase सेटअप
 
-| Role   | Mobile        | Password    |
-|--------|---------------|-------------|
-| Player | `9800000001`  | `player123` |
-| Admin  | `8955005076`  | `admin@123` |
+`assets/js/config.js` में प्रोजेक्ट URL और **publishable** key हैं — ये ब्राउज़र में रहना
+सुरक्षित है, क्योंकि हर टेबल पर Row Level Security लगी है और कोई भी छात्र सिर्फ़ अपनी
+पंक्तियाँ पढ़/लिख सकता है।
 
-The admin panel asks for the admin password (`admin@123`) once per session.
-Change the admin mobile/password and all economy settings in **Admin → Settings**.
+> ⚠️ `service_role` / `sb_secret_…` key कभी भी इस फ़ोल्डर में न डालें — यहाँ का सब कुछ ब्राउज़र तक पहुँचता है।
 
-## 🧱 Data model (localStorage)
-
-| Key                  | Notable fields |
-|----------------------|----------------|
-| `ffth_users`         | id, username, mobile, freeFireUID, password, **balance (coins)**, tournamentsWon, totalEarnings, kills, deaths, matchesPlayed, role |
-| `ffth_tournaments`   | id, title, date, time, entryFee, perKill, maxTeams, type, status, map, rules, poolMode, guaranteedPool, commissionOverride, roomId, roomPass |
-| `ffth_registrations` | id, userId, tournamentId, teamName, inGameName, inGameId, slotNo, position, paymentStatus |
-| `ffth_transactions`  | id, userId, amount (coins), type, status, description, date, meta |
-| `ffth_matches`       | id, tournamentId, rank, kills, winnerUserId, inGameName, screenshot, verified |
-| `ffth_settings`      | commissionPercent, coinPerRupee, split, minAdd, minWithdraw, adminMobile, adminPassword, supportMobile, signupBonus |
-
-## 💳 Real payments later (Razorpay)
-
-Payments are **simulated** by default (works with zero backend). To go live:
-
-1. `assets/js/config.js` → `RAZORPAY.enabled = true`, set `RAZORPAY.keyId` (PUBLIC key id).
-2. Add `<script src="https://checkout.razorpay.com/v1/checkout.js"></script>` to `index.html`.
-3. Create orders **server-side** and verify **webhooks** on your server. Use `.env.example`
-   for the secret keys / webhook URL.
-
-> ⚠️ **Security:** Never put secret keys in front-end code. A Razorpay `key_secret`,
-> a webhook secret, or a Supabase `service_role` / `sb_secret_...` key must live only on
-> a server you control. Everything in this repo ships to the browser and is public.
-
-## 📁 Structure
+नए प्रोजेक्ट पर लगाने के लिए दोनों माइग्रेशन चलाएँ:
 
 ```
-index.html                # app shell + bottom nav
+supabase/migrations/0001_schema.sql     # टेबल + ट्रिगर
+supabase/migrations/0002_rls.sql        # RLS पॉलिसी + स्टोरेज बकेट
+```
+
+फिर `config.js` में अपना `url` और `publishableKey` भर दें।
+
+### टेबल
+
+सिलेबस (विषय/चैप्टर/टॉपिक और वेटेज) डेटाबेस में नहीं है — वह स्थिर संदर्भ डेटा है और
+`assets/js/syllabus.js` में रहता है। डेटाबेस में सिर्फ़ आपका अपना डेटा जाता है:
+
+| टेबल | क्या रखती है |
+|---|---|
+| `padhai_profiles` | नाम, लक्ष्य परीक्षा, परीक्षा तिथि, रोज़ का लक्ष्य |
+| `padhai_progress` | हर चैप्टर के पाँच स्टेप, PYQ गिनती, टेस्ट स्कोर, आत्मविश्वास, रिवीज़न, नोट्स |
+| `padhai_logs` | हर पढ़ाई की एंट्री (गतिविधि, प्रश्न, मिनट, तारीख़) |
+| `padhai_resources` | अपलोड की गई फ़ाइलों का मेटाडेटा |
+| `padhai_questions` | आपके इम्पोर्ट किए प्रश्न (`owner_id` शून्य = साझा बैंक) |
+| `padhai_sessions` / `padhai_attempts` | प्रैक्टिस सेशन और हर प्रश्न का प्रयास |
+
+## फ़ाइल संरचना
+
+```
+index.html
 assets/
-  css/styles.css          # navy/blue + gold-coin mobile theme
+  css/app.css          # सफ़ेद थीम डिज़ाइन सिस्टम
   js/
-    config.js             # economy defaults + public keys only
-    store.js              # localStorage + coin economy + live pool math
-    ui.js                 # coins, app-bar/screen, toasts, sheets, validation
-    auth.js               # mobile login/register
-    payments.js           # simulated + real Razorpay
-    pages.js              # all user screens
-    admin.js              # admin panel (settings, contests, results, payouts)
-    app.js                # router, bottom nav, live countdowns
+    config.js          # public keys + पढ़ाई/प्रैक्टिस सेटिंग्स
+    syllabus.js        # JEE सिलेबस + 2021–26 वेटेज + टॉपिक
+    seedbank.js        # साथ आने वाला अभ्यास बैंक
+    ui.js              # DOM हेल्पर, टोस्ट, मोडल, हिंदी फ़ॉर्मैटिंग
+    db.js              # Supabase क्वेरी + कैश
+    analysis.js        # प्राथमिकता, रफ़्तार, रिवीज़न, कमज़ोरी — सब गणना
+    practice.js        # प्रश्न चुनना, हल करना, रिज़ल्ट
+    pages.js           # सारे स्क्रीन
+    app.js             # राउटर + शेल
+  vendor/supabase.js   # @supabase/supabase-js 2.58 (ऑफ़लाइन के लिए साथ रखा)
+supabase/migrations/   # स्कीमा + RLS
+arena/                 # पुराना Free Fire टूर्नामेंट ऐप (अलग, /arena/ पर चलता है)
 ```

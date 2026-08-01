@@ -1,709 +1,918 @@
-/* =========================================================================
- * LegentArena — Screens (mobile-first). Every money number is computed from
- * real records via Store. Heavy FOMO, simple to understand.
- * ======================================================================= */
+/* All screens. Every figure shown here comes from ANALYSIS, which reads the
+   student's own rows — nothing on screen is a placeholder number. */
 (function () {
-  'use strict';
+  const el = UI.el;
+  const S = window.CONFIG.study;
 
-  var esc = UI.esc, coins = UI.coins, rupees = UI.rupees, num = UI.num;
+  const SUBJ_COLOR = { physics: 'var(--phy)', chemistry: 'var(--chem)', maths: 'var(--math)' };
 
-  function frag(html) { var d = document.createElement('div'); d.innerHTML = html; return d; }
-  function typeChip(t) { return '<span class="chip chip-' + t.toLowerCase() + '">' + esc(t) + '</span>'; }
-  function statusPill(s) {
-    if (s === 'live') return '<span class="pill pill-live"><span class="dot"></span>LIVE</span>';
-    if (s === 'completed') return '<span class="pill pill-done">RESULT</span>';
-    return '';
-  }
-  function iso(t) { return (t.date || '') + 'T' + (t.time || '00:00') + ':00'; }
+  /* ============ auth ============ */
 
-  /* ---- Slot bar with FOMO ---- */
-  function slotBar(t) {
-    var joined = Store.joinedCount(t.id), left = Math.max(0, t.maxTeams - joined);
-    var pct = Math.min(100, Math.round((joined / t.maxTeams) * 100));
-    var hot = left > 0 && left <= Math.max(3, Math.ceil(t.maxTeams * 0.25));
-    var label = left === 0 ? '<span class="slot-full">🚫 Slots Full</span>'
-      : hot ? '<span class="slot-hot">🔥 Only ' + left + ' left!</span>'
-      : '<span class="slot-left">' + left + ' spots left</span>';
-    return '<div class="slots">' +
-      '<div class="slots-top"><span class="slots-count">' + joined + '/' + t.maxTeams + ' joined</span>' + label + '</div>' +
-      '<div class="slots-track"><div class="slots-fill' + (hot || left === 0 ? ' hot' : '') + '" style="width:' + pct + '%"></div></div>' +
-    '</div>';
-  }
+  function authScreen(mode) {
+    const root = document.getElementById('root');
+    UI.clear(root);
+    const isLogin = mode !== 'signup';
 
-  /* ---- Contest card ---- */
-  function contestCard(t) {
-    var live = Store.livePool(t), full = Store.fullPool(t);
-    var left = Store.slotsLeft(t);
-    var joinable = t.status !== 'completed' && left > 0;
-    var perKill = t.perKill > 0 ? '<span class="mini-tag">💀 ' + coins(t.perKill) + '/kill</span>' : '';
-    return '' +
-    '<article class="ccard" data-open="' + t.id + '">' +
-      '<div class="ccard-top">' +
-        '<div class="ccard-badges">' + typeChip(t.type) + statusPill(t.status) + '</div>' +
-        (t.status === 'upcoming' ? '<span class="ccard-time" data-deadline="' + iso(t) + '">⏱ …</span>' : '') +
-      '</div>' +
-      '<h3 class="ccard-title">' + esc(t.title) + '</h3>' +
-      '<div class="ccard-sub">📅 ' + UI.fmtDate(t.date) + ' • 🕘 ' + esc(t.time) + ' • 🗺️ ' + esc(t.map || '—') + '</div>' +
-      '<div class="ccard-pool">' +
-        '<div class="pool-main"><span class="pool-label">PRIZE POOL</span><span class="pool-val">' + coins(live) + '</span>' +
-          (t.poolMode !== 'fixed' && full > live ? '<span class="pool-up">grows to ' + coins(full) + ' when full</span>' : '') + '</div>' +
-        '<div class="pool-side">' + perKill + '<span class="mini-tag">🎟️ Entry ' + (t.entryFee ? coins(t.entryFee) : 'FREE') + '</span></div>' +
-      '</div>' +
-      slotBar(t) +
-      '<div class="ccard-actions">' +
-        '<button class="btn btn-ghost btn-sm" data-view="' + t.id + '">Details</button>' +
-        '<button class="btn btn-primary btn-sm ' + (joinable ? 'glow' : '') + '" data-join="' + t.id + '"' + (joinable ? '' : ' disabled') + '>' +
-          (t.status === 'completed' ? 'View Result' : left === 0 ? 'Full' : 'JOIN NOW') + '</button>' +
-      '</div>' +
-    '</article>';
-  }
+    const name  = UI.input({ placeholder: 'आपका नाम', autocomplete: 'name' });
+    const email = UI.input({ type: 'email', placeholder: 'you@example.com', autocomplete: 'email' });
+    const pass  = UI.input({ type: 'password', placeholder: '••••••••', autocomplete: isLogin ? 'current-password' : 'new-password' });
 
-  function wireCards(root) {
-    root.querySelectorAll('[data-view]').forEach(function (b) { b.addEventListener('click', function (e) { e.stopPropagation(); location.hash = '#/contest/' + b.getAttribute('data-view'); }); });
-    root.querySelectorAll('[data-join]').forEach(function (b) { b.addEventListener('click', function (e) { e.stopPropagation();
-      var t = Store.tournamentById(b.getAttribute('data-join'));
-      if (t && t.status === 'completed') location.hash = '#/contest/' + t.id; else Pages.startRegistration(b.getAttribute('data-join')); }); });
-    root.querySelectorAll('[data-open]').forEach(function (c) { c.addEventListener('click', function (e) { if (e.target.closest('button')) return; location.hash = '#/contest/' + c.getAttribute('data-open'); }); });
-  }
+    const form = el('form', { class: 'auth-card' });
+    const submit = el('button', { class: 'btn btn-primary btn-lg btn-block mt8', type: 'submit',
+      text: isLogin ? 'लॉगिन करें' : 'खाता बनाएँ' });
 
-  /* ---- FOMO strip: real all-time payout + open contests ---- */
-  function fomoStrip() {
-    var paid = Store.transactions().filter(function (x) { return x.meta && x.meta.kind === 'prize'; })
-      .reduce(function (s, x) { return s + x.amount; }, 0);
-    var open = Store.tournaments().filter(function (t) { return t.status !== 'completed' && Store.slotsLeft(t) > 0; }).length;
-    var live = Store.tournaments().filter(function (t) { return t.status === 'live'; }).length;
-    return '<div class="fomo">' +
-      '<div class="fomo-item"><span class="fomo-val">' + coins(paid) + '</span><span class="fomo-label">paid to players</span></div>' +
-      '<div class="fomo-item"><span class="fomo-val">' + open + '</span><span class="fomo-label">open contests</span></div>' +
-      '<div class="fomo-item"><span class="fomo-val">' + (live || open) + '</span><span class="fomo-label">' + (live ? 'live now' : 'filling now') + '</span></div>' +
-    '</div>';
-  }
+    form.appendChild(el('div', { class: 'auth-logo', text: 'प' }));
+    form.appendChild(el('h2', { class: 'center', text: isLogin ? 'वापस स्वागत है' : 'PadhAI से शुरू करें' }));
+    form.appendChild(el('p', { class: 'center muted small mb16',
+      text: isLogin ? 'अपनी तैयारी वहीं से जारी रखें' : 'JEE Main की तैयारी — हिंदी में, आपके अपने डेटा पर' }));
+    if (!isLogin) form.appendChild(UI.field('नाम', name));
+    form.appendChild(UI.field('ईमेल', email));
+    form.appendChild(UI.field('पासवर्ड', pass, isLogin ? null : 'कम से कम 6 अक्षर'));
+    form.appendChild(submit);
+    form.appendChild(el('div', { class: 'center small mt16' }, [
+      el('span', { class: 'dim', text: isLogin ? 'नया खाता? ' : 'पहले से खाता है? ' }),
+      el('a', { href: isLogin ? '#/signup' : '#/login', style: 'color:var(--brand);font-weight:650',
+        text: isLogin ? 'बनाएँ' : 'लॉगिन करें' })
+    ]));
 
-  /* =====================================================================
-   * HOME
-   * ================================================================== */
-  function home() {
-    var user = Auth.current();
-    var tours = Store.tournaments().slice().sort(function (a, b) {
-      var order = { live: 0, upcoming: 1, completed: 2 };
-      if (order[a.status] !== order[b.status]) return order[a.status] - order[b.status];
-      return (a.date + a.time).localeCompare(b.date + b.time);
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      UI.clearErrors(form);
+      let bad = false;
+      if (!isLogin && name.value.trim().length < 2) { UI.showError(name, 'नाम लिखें'); bad = true; }
+      if (!/^\S+@\S+\.\S+$/.test(email.value.trim())) { UI.showError(email, 'सही ईमेल लिखें'); bad = true; }
+      if (pass.value.length < 6) { UI.showError(pass, 'पासवर्ड कम से कम 6 अक्षर'); bad = true; }
+      if (bad) return;
+
+      submit.disabled = true;
+      submit.textContent = isLogin ? 'लॉगिन हो रहा है…' : 'खाता बन रहा है…';
+      try {
+        if (isLogin) {
+          await DB.signIn(email.value.trim(), pass.value);
+        } else {
+          const res = await DB.signUp(email.value.trim(), pass.value, name.value.trim());
+          if (!res.session) {
+            UI.modal({
+              title: 'ईमेल की पुष्टि करें',
+              body: el('p', { class: 'muted', text: 'आपके ईमेल पर एक लिंक भेजा गया है। उसे खोलकर पुष्टि करें, फिर लॉगिन करें।' }),
+              actions: [{ label: 'ठीक है', class: 'btn-primary', onClick: function () { location.hash = '#/login'; } }]
+            });
+            submit.disabled = false;
+            submit.textContent = 'खाता बनाएँ';
+            return;
+          }
+        }
+        await APP.afterLogin();
+      } catch (err) {
+        submit.disabled = false;
+        submit.textContent = isLogin ? 'लॉगिन करें' : 'खाता बनाएँ';
+        const m = String(err.message || '');
+        UI.toast(/Invalid login/i.test(m) ? 'ईमेल या पासवर्ड गलत है'
+               : /already registered/i.test(m) ? 'यह ईमेल पहले से रजिस्टर्ड है'
+               : m || 'कुछ गड़बड़ हुई', 'err');
+      }
     });
 
-    var node = UI.screen({
-      title: 'LegentArena', back: false,
-      rightHTML: user ? '<a href="#/wallet" class="bal-chip">' + coins(user.balance) + '</a>' : '<a href="#/login" class="bal-chip login">Login</a>',
+    root.appendChild(el('div', { class: 'auth-wrap' }, form));
+  }
+
+  /* ============ dashboard ============ */
+
+  async function dashboard(root) {
+    UI.clear(root);
+    const wrap = el('div', { class: 'page fade-up' });
+    root.appendChild(wrap);
+
+    const o = ANALYSIS.overall();
+    const p = ANALYSIS.pace();
+    const st = ANALYSIS.streak();
+    const prof = DB.cache.profile || {};
+
+    // hero
+    const d = p.daysLeft;
+    wrap.appendChild(el('div', { class: 'hero' }, [
+      el('h2', { text: 'नमस्ते, ' + (prof.name || 'विद्यार्थी') + ' 👋' }),
+      el('p', { text: (prof.target_exam || S.defaultExam) + ' · ' + UI.dateHi(p.examDate) }),
+      el('div', { class: 'hero-stats' }, [
+        el('div', { class: 'hero-stat' }, [el('b', { text: d }), el('span', { text: 'दिन बाकी' })]),
+        el('div', { class: 'hero-stat' }, [el('b', { text: o.done + '/' + o.total }), el('span', { text: 'चैप्टर पूरे' })]),
+        el('div', { class: 'hero-stat' }, [el('b', { text: o.weightPct + '%' }), el('span', { text: 'वेटेज कवर' })]),
+        el('div', { class: 'hero-stat' }, [el('b', { text: st }), el('span', { text: 'दिन स्ट्रीक' })])
+      ])
+    ]));
+
+    // today's goal
+    wrap.appendChild(el('div', { class: 'card card-pad mt16' }, [
+      el('div', { class: 'row' }, [
+        el('div', {}, [
+          el('div', { style: 'font-weight:700', text: 'आज की पढ़ाई' }),
+          el('div', { class: 'small dim', text: UI.mins(p.todayMinutes) + ' / ' + UI.mins(p.dailyGoalMin) })
+        ]),
+        el('div', { class: 'spacer' }),
+        el('button', { class: 'btn btn-sm btn-primary', text: '+ लॉग करें', onclick: function () { logModal(); } })
+      ]),
+      el('div', { class: 'mt12' }, UI.bar(p.todayPct, p.todayPct >= 100 ? 'green' : p.todayPct >= 50 ? '' : 'amber'))
+    ]));
+
+    // AI briefing
+    const insightsBox = el('div');
+    wrap.appendChild(el('div', { class: 'section-title', text: 'आज का विश्लेषण' }));
+    wrap.appendChild(insightsBox);
+    insightsBox.appendChild(UI.loading('आपका डेटा जाँचा जा रहा है…'));
+    DB.attemptStats().then(function (attempts) {
+      UI.clear(insightsBox);
+      const cards = ANALYSIS.dailyInsights(attempts);
+      if (!cards.length) {
+        insightsBox.appendChild(UI.insight('info', '👋', 'शुरुआत करें',
+          'कोई भी चैप्टर खोलकर लेक्चर/DPP मार्क करें — फिर यहाँ रोज़ का विश्लेषण दिखेगा।'));
+      }
+      cards.forEach(function (c) { insightsBox.appendChild(UI.insight(c.kind, c.icon, c.title, c.detail)); });
+    }).catch(function () {
+      UI.clear(insightsBox);
+      insightsBox.appendChild(UI.insight('warn', '⚠️', 'विश्लेषण लोड नहीं हुआ', 'इंटरनेट जाँचें और पेज रिफ़्रेश करें।'));
     });
-    var body = node._body;
 
-    var state = { type: 'all' };
-    body.innerHTML = '' +
-      '<div class="hero-banner">' +
-        '<div class="hero-flame">🔥</div>' +
-        '<div class="hero-copy"><h2>Play Free Fire.<br>Win Real Cash.</h2>' +
-          '<p>Join daily Solo, Duo & Squad contests. Winnings hit your wallet instantly.</p></div>' +
-      '</div>' +
-      fomoStrip() +
-      (user ? '' : '<a href="#/register" class="cta-join glow">🎮 Create Free Account & Play →</a>') +
-      '<div class="filter-row" id="typeFilter">' +
-        '<button class="fbtn active" data-type="all">All</button>' +
-        '<button class="fbtn" data-type="Solo">Solo</button>' +
-        '<button class="fbtn" data-type="Duo">Duo</button>' +
-        '<button class="fbtn" data-type="Squad">Squad</button>' +
-        '<div class="search-mini"><input id="homeSearch" type="search" placeholder="🔍 Search"/></div>' +
-      '</div>' +
-      '<div class="clist" id="clist"></div>';
-
-    var listEl = body.querySelector('#clist');
-    var q = '';
-    function apply() {
-      var list = tours.filter(function (t) {
-        var mt = state.type === 'all' || t.type === state.type;
-        var mq = !q || (t.title + ' ' + (t.map || '')).toLowerCase().indexOf(q.toLowerCase()) !== -1;
-        return mt && mq;
+    // today's plan
+    const plan = ANALYSIS.todayPlan();
+    wrap.appendChild(el('div', { class: 'section-title', text: 'आज का प्लान (' + UI.mins(plan.plannedMinutes) + ')' }));
+    if (!plan.items.length) {
+      wrap.appendChild(el('div', { class: 'card' }, UI.empty('🎉', 'सब कुछ पूरा!', 'सारे चैप्टर हो चुके — अब रिवीज़न और मॉक टेस्ट पर ध्यान दें।')));
+    } else {
+      const planBox = el('div');
+      plan.items.forEach(function (it) {
+        planBox.appendChild(el('div', { class: 'insight', style: 'cursor:pointer',
+          onclick: function () { location.hash = '#/chapter/' + it.chapterId; } }, [
+          el('div', { class: 'insight-ic', text: it.icon }),
+          el('div', { style: 'flex:1;min-width:0' }, [
+            el('div', { class: 'insight-t', text: it.title }),
+            el('div', { class: 'insight-d', text: it.detail })
+          ]),
+          el('div', { class: 'chip', text: UI.mins(it.minutes) })
+        ]));
       });
-      listEl.innerHTML = list.length ? list.map(contestCard).join('')
-        : '<div class="empty"><span class="empty-ic">🎮</span><p>No contests here yet. Check back soon!</p></div>';
-      wireCards(listEl);
-      if (window.App) App.tickCountdowns();
+      wrap.appendChild(planBox);
     }
-    body.querySelector('#typeFilter').addEventListener('click', function (e) {
-      var b = e.target.closest('[data-type]'); if (!b) return;
-      state.type = b.getAttribute('data-type');
-      body.querySelectorAll('#typeFilter .fbtn').forEach(function (x) { x.classList.remove('active'); });
-      b.classList.add('active'); apply();
+
+    // subject rings
+    wrap.appendChild(el('div', { class: 'section-title', text: 'विषय-वार प्रगति' }));
+    const grid = el('div', { class: 'grid g3' });
+    SYLLABUS.subjects.forEach(function (s) {
+      const sum = ANALYSIS.subjectSummary(s.id);
+      grid.appendChild(el('div', { class: 'card card-pad', style: 'cursor:pointer',
+        onclick: function () { location.hash = '#/syllabus/' + s.id; } }, [
+        el('div', { class: 'row' }, [
+          UI.ring(sum.pct, s.color),
+          el('div', { style: 'min-width:0' }, [
+            el('div', { style: 'font-weight:700', text: s.hi }),
+            el('div', { class: 'tiny dim', text: sum.done + '/' + sum.total + ' चैप्टर पूरे' }),
+            el('div', { class: 'tiny dim', text: 'वेटेज कवर ' + sum.weightPct + '%' })
+          ])
+        ])
+      ]));
     });
-    body.querySelector('#homeSearch').addEventListener('input', function (e) { q = e.target.value; apply(); });
-    apply();
-    return node;
+    wrap.appendChild(grid);
+
+    // quick actions
+    wrap.appendChild(el('div', { class: 'grid g2 mt16' }, [
+      el('button', { class: 'btn btn-primary btn-lg', text: '🎯 प्रैक्टिस शुरू करें', onclick: function () { location.hash = '#/practice'; } }),
+      el('button', { class: 'btn btn-lg', text: '📚 सिलेबस देखें', onclick: function () { location.hash = '#/syllabus'; } })
+    ]));
   }
 
-  /* =====================================================================
-   * CONTEST DETAIL
-   * ================================================================== */
-  function contestDetail(id) {
-    var t = Store.tournamentById(id);
-    if (!t) return UI.screen({ title: 'Contest', html: emptyBox('Contest not found.', '#/', 'Go Home') });
+  /* ============ log modal ============ */
 
-    var user = Auth.current();
-    var live = Store.livePool(t), full = Store.fullPool(t);
-    var left = Store.slotsLeft(t);
-    var myReg = user && Store.regsFor(t.id).find(function (r) { return r.userId === user.id; });
-    var joinable = t.status !== 'completed' && left > 0 && !myReg;
-    var split = Store.settings().split || { first: 50, second: 30, third: 20 };
-    var results = Store.matches().filter(function (m) { return m.tournamentId === t.id && m.verified; }).sort(function (a, b) { return a.rank - b.rank; });
+  function logModal(chapterId) {
+    const chapters = SYLLABUS.chapters;
+    const chSel = UI.select(
+      [{ value: '', label: '— चैप्टर चुनें (वैकल्पिक) —' }].concat(chapters.map(function (c) {
+        return { value: c.id, label: SYLLABUS.subject(c.subjectId).short + ' · ' + c.hi, selected: c.id === chapterId };
+      })));
+    const actSel = UI.select([
+      { value: 'lecture', label: '🎥 लेक्चर' }, { value: 'dpp', label: '📝 DPP' },
+      { value: 'module', label: '📘 मॉड्यूल' }, { value: 'pyq', label: '🎯 PYQ' },
+      { value: 'test', label: '🏁 टेस्ट' }, { value: 'revision', label: '🔁 रिवीज़न' }
+    ]);
+    const qty = UI.input({ type: 'number', min: '0', value: '0', placeholder: '0' });
+    const minutes = UI.input({ type: 'number', min: '0', value: '60' });
+    const note = UI.input({ placeholder: 'कोई नोट (वैकल्पिक)' });
 
-    var node = UI.screen({ title: t.type + ' Contest', backTo: '#/' });
-    var body = node._body;
-
-    body.innerHTML = '' +
-      '<div class="detail-hero">' +
-        '<div class="ccard-badges">' + typeChip(t.type) + statusPill(t.status) +
-          (t.status === 'upcoming' ? '<span class="ccard-time" data-deadline="' + iso(t) + '">⏱ …</span>' : '') + '</div>' +
-        '<h2>' + esc(t.title) + '</h2>' +
-        '<div class="detail-sub">📅 ' + UI.fmtDate(t.date) + ' • 🕘 ' + esc(t.time) + ' • 🗺️ ' + esc(t.map || '—') + '</div>' +
-      '</div>' +
-
-      '<div class="pool-hero">' +
-        '<span class="pool-hero-label">TOTAL PRIZE POOL</span>' +
-        '<span class="pool-hero-val">' + coins(live) + '</span>' +
-        (t.poolMode !== 'fixed' && full > live ? '<span class="pool-hero-up">Grows up to ' + coins(full) + ' as slots fill 🔥</span>' : '') +
-      '</div>' +
-
-      '<div class="info-grid">' +
-        infoTile('🎟️', t.entryFee ? coins(t.entryFee) : 'FREE', 'Entry') +
-        infoTile('👥', t.maxTeams, 'Total Slots') +
-        infoTile('💀', t.perKill > 0 ? coins(t.perKill) : '—', 'Per Kill') +
-        infoTile('🏆', num(Store.joinedCount(t.id)), 'Joined') +
-      '</div>' +
-
-      slotBarBlock(t) +
-
-      '<div class="card-block"><h4 class="blk-title">💰 Winnings Breakdown</h4>' +
-        '<div class="prize-rows">' +
-          prizeRow('🥇', '1st Rank', Store.rankPrize(t, 1), split.first) +
-          prizeRow('🥈', '2nd Rank', Store.rankPrize(t, 2), split.second) +
-          prizeRow('🥉', '3rd Rank', Store.rankPrize(t, 3), split.third) +
-          (t.perKill > 0 ? '<div class="prize-row"><span class="pr-ic">💀</span><span class="pr-name">Per Kill Bonus</span><span class="pr-val">' + coins(t.perKill) + '</span></div>' : '') +
-        '</div>' +
-        '<p class="pool-note muted">Prize pool = total entries − ' + Store.commissionOf(t) + '% platform fee. It rises live as players join.</p>' +
-      '</div>' +
-
-      (myReg ? roomBlock(t, myReg) : '') +
-
-      (results.length ? '<div class="card-block"><h4 class="blk-title">🏆 Results</h4>' + results.map(function (m) {
-        return '<div class="prize-row"><span class="pr-ic">' + (m.rank === 1 ? '🥇' : m.rank === 2 ? '🥈' : m.rank === 3 ? '🥉' : '🎯') + '</span>' +
-          '<span class="pr-name">' + esc(m.inGameName || 'Player') + ' <span class="muted small">• ' + (m.kills || 0) + ' kills</span></span>' +
-          '<span class="pr-val">' + coins(Store.rankPrize(t, m.rank) + (m.kills || 0) * (t.perKill || 0)) + '</span></div>';
-      }).join('') + '</div>' : '') +
-
-      '<div class="card-block"><h4 class="blk-title">📋 Rules</h4><p class="rules">' + esc(t.rules || 'Standard rules apply.') + '</p></div>' +
-      '<div style="height:80px"></div>';
-
-    // sticky bottom bar
-    var bar = frag('<div class="action-bar">' +
-      '<button class="btn btn-ghost" id="viewJoinings">👥 Joinings (' + Store.joinedCount(t.id) + ')</button>' +
-      (myReg
-        ? '<button class="btn btn-primary" id="myEntry">✅ Joined • Slot ' + myReg.slotNo + '</button>'
-        : '<button class="btn btn-primary ' + (joinable ? 'glow' : '') + '" id="joinBtn"' + (joinable ? '' : ' disabled') + '>' +
-            (t.status === 'completed' ? 'Ended' : left === 0 ? 'Slots Full' : 'JOIN • ' + (t.entryFee ? rupees(t.entryFee) : 'FREE')) + '</button>') +
-    '</div>').firstChild;
-    node.appendChild(bar);
-
-    bar.querySelector('#viewJoinings').addEventListener('click', function () { location.hash = '#/joinings/' + t.id; });
-    var jb = bar.querySelector('#joinBtn'); if (jb) jb.addEventListener('click', function () { Pages.startRegistration(t.id); });
-    var me = bar.querySelector('#myEntry'); if (me) me.addEventListener('click', function () { location.hash = '#/joinings/' + t.id; });
-
-    if (window.App) App.tickCountdowns();
-    return node;
-  }
-
-  function infoTile(ic, val, label) { return '<div class="itile"><span class="itile-ic">' + ic + '</span><span class="itile-val">' + val + '</span><span class="itile-label">' + label + '</span></div>'; }
-  function prizeRow(ic, name, val, pct) { return '<div class="prize-row"><span class="pr-ic">' + ic + '</span><span class="pr-name">' + name + ' <span class="muted small">' + pct + '%</span></span><span class="pr-val">' + coins(val) + '</span></div>'; }
-  function slotBarBlock(t) { return '<div class="card-block">' + slotBar(t) + '</div>'; }
-  function roomBlock(t, reg) {
-    var hasRoom = t.roomId || t.roomPass;
-    return '<div class="card-block room-block">' +
-      '<h4 class="blk-title">🎮 Match Room</h4>' +
-      '<div class="room-your">Your slot: <strong>#' + reg.slotNo + '</strong> • IGN: <strong>' + esc(reg.inGameName) + '</strong></div>' +
-      (hasRoom
-        ? '<div class="room-creds"><div class="room-cred"><span>Room ID</span><strong>' + esc(t.roomId || '—') + '</strong></div>' +
-          '<div class="room-cred"><span>Password</span><strong>' + esc(t.roomPass || '—') + '</strong></div></div>'
-        : '<p class="muted small">Room ID & password appear here ~10 min before start. Keep this page open. 🔔</p>') +
-      (t.status !== 'completed' ? '<button class="btn btn-ghost btn-block btn-sm" id="submitResultBtn2" data-t="' + t.id + '">📸 Submit My Result</button>' : '') +
-    '</div>';
-  }
-
-  /* =====================================================================
-   * ALL JOININGS
-   * ================================================================== */
-  function joinings(id) {
-    var t = Store.tournamentById(id);
-    if (!t) return UI.screen({ title: 'Joinings', html: emptyBox('Contest not found.', '#/', 'Go Home') });
-    var user = Auth.current();
-    var regs = Store.regsFor(t.id).slice().sort(function (a, b) { return a.slotNo - b.slotNo; });
-
-    var node = UI.screen({ title: 'All Joinings', backTo: '#/contest/' + t.id });
-    node._body.innerHTML = '' +
-      '<div class="join-head"><strong>' + esc(t.title) + '</strong><span class="muted small">' + regs.length + '/' + t.maxTeams + ' slots filled</span></div>' +
-      '<div class="jtable">' +
-        '<div class="jrow jhead"><span>Slot</span><span>Pos</span><span>In-Game Name</span><span>Game ID</span></div>' +
-        (regs.length ? regs.map(function (r) {
-          var mine = user && r.userId === user.id;
-          return '<div class="jrow' + (mine ? ' jmine' : '') + '"><span>' + r.slotNo + '</span><span>' + esc(r.position || 'A') + '</span>' +
-            '<span class="jname">' + esc(r.inGameName || r.teamName) + (mine ? ' <span class="you-tag">YOU</span>' : '') + '</span>' +
-            '<span class="jid">' + esc(r.inGameId || '—') + '</span></div>';
-        }).join('') : '<div class="empty"><p>No one has joined yet. Be the first! 🔥</p></div>') +
-      '</div>' +
-      '<div style="height:80px"></div>';
-
-    var bar = frag('<div class="action-bar">' +
-      (user && Store.isRegistered(user.id, t.id)
-        ? '<button class="btn btn-primary" id="jResult">📸 Submit Result</button>'
-        : '<button class="btn btn-primary glow" id="jJoin"' + (Store.slotsLeft(t) > 0 && t.status !== 'completed' ? '' : ' disabled') + '>JOIN NOW</button>') +
-    '</div>').firstChild;
-    node.appendChild(bar);
-    var jj = bar.querySelector('#jJoin'); if (jj) jj.addEventListener('click', function () { Pages.startRegistration(t.id); });
-    var jr = bar.querySelector('#jResult'); if (jr) jr.addEventListener('click', function () { Pages.submitResult(t.id); });
-    return node;
-  }
-
-  /* =====================================================================
-   * REGISTRATION
-   * ================================================================== */
-  function startRegistration(id) {
-    if (!Auth.requireAuth()) return;
-    var t = Store.tournamentById(id); if (!t) return;
-    if (t.status === 'completed') { UI.toast('This contest has ended.', 'warn'); return; }
-    var user = Store.userById(Auth.current().id);
-    if (Store.isRegistered(user.id, t.id)) { UI.toast('You already joined this contest.', 'info'); location.hash = '#/joinings/' + t.id; return; }
-    if (Store.slotsLeft(t) <= 0) { UI.toast('Slots are full.', 'warn'); return; }
-
-    var needSquad = t.type !== 'Solo';
-    var body = frag('' +
-      '<div class="reg-flow">' +
-        '<div class="reg-sum"><div class="reg-sum-title">' + esc(t.title) + '</div>' +
-          '<div class="reg-sum-meta">' + esc(t.type) + ' • ' + UI.fmtDate(t.date) + ' ' + esc(t.time) + '</div>' +
-          '<div class="reg-sum-fee"><span>Entry Fee</span><strong>' + (t.entryFee ? coins(t.entryFee) : 'FREE') + '</strong></div></div>' +
-        '<div class="field"><label>In-Game Name (IGN)</label><input id="rIgn" maxlength="20" value="' + esc(user.username) + '"/><span class="field-err"></span></div>' +
-        '<div class="field"><label>Free Fire UID</label><input id="rUid" inputmode="numeric" value="' + esc(user.freeFireUID || '') + '" placeholder="Your in-game ID"/><span class="field-err"></span></div>' +
-        (needSquad ? '<div class="field"><label>Team Name</label><input id="rTeam" maxlength="20" value="' + esc(user.username) + ' Squad"/><span class="field-err"></span></div>' : '') +
-        '<div class="reg-bal">Wallet: <strong>' + coins(user.balance) + '</strong>' +
-          (t.entryFee > user.balance ? ' <span class="reg-low">• Low balance</span>' : '') + '</div>' +
-        (t.entryFee > user.balance
-          ? '<p class="reg-warn">You need ' + coins(t.entryFee - user.balance) + ' more. <a href="#/wallet" id="regAdd">Add Coins →</a></p>'
-          : '<p class="muted small">' + coins(t.entryFee) + ' will be deducted from your wallet.</p>') +
-      '</div>');
-
-    var addLink = body.querySelector('#regAdd');
-    UI.openModal({
-      title: '🎟️ Join Contest', node: body,
+    UI.modal({
+      title: 'पढ़ाई लॉग करें',
+      body: el('div', {}, [
+        UI.field('चैप्टर', chSel),
+        el('div', { class: 'grid g2' }, [
+          UI.field('गतिविधि', actSel),
+          UI.field('समय (मिनट)', minutes)
+        ]),
+        UI.field('कितने प्रश्न हल किए', qty, 'PYQ/DPP/मॉड्यूल के लिए — चैप्टर की गिनती अपने आप बढ़ेगी'),
+        UI.field('नोट', note)
+      ]),
       actions: [
-        { label: 'Cancel', kind: 'ghost' },
-        { label: t.entryFee ? 'Confirm & Pay ' + coins(t.entryFee) : 'Confirm (Free)', kind: 'primary', onClick: function () {
-            var ign = body.querySelector('#rIgn'), uidI = body.querySelector('#rUid');
-            var ignV = (ign.value || '').trim(), uidV = (uidI.value || '').trim();
-            var team = needSquad ? (body.querySelector('#rTeam').value || '').trim() : ignV;
-            var ok = true;
-            if (ignV.length < 2) { UI.fieldError(ign, 'Enter your in-game name.'); ok = false; }
-            if (!UI.Validate.ffuid(uidV)) { UI.fieldError(uidI, 'Enter a valid UID (6–12 digits).'); ok = false; }
-            if (!ok) return true;
-            if (t.entryFee > 0 && user.balance < t.entryFee) {
-              UI.closeModal(); UI.toast('Add coins to join.', 'warn'); location.hash = '#/wallet'; return true;
+        { label: 'रद्द', class: 'btn-ghost' },
+        { label: 'सेव करें', class: 'btn-primary', onClick: function (ctx) {
+          const m = parseInt(minutes.value, 10) || 0;
+          const q = parseInt(qty.value, 10) || 0;
+          if (!m && !q) { UI.toast('समय या प्रश्नों की संख्या भरें', 'err'); return true; }
+          ctx.button.disabled = true; ctx.button.textContent = 'सेव…';
+          DB.addLog({
+            chapter_id: chSel.value || null, activity: actSel.value,
+            qty: q, minutes: m, note: note.value.trim() || null
+          }).then(async function () {
+            if (chSel.value && q && actSel.value === 'pyq') {
+              const cur = DB.progressOf(chSel.value);
+              await DB.saveProgress(chSel.value, { pyq_count: (cur.pyq_count || 0) + q });
             }
-            confirmJoin(t, user, { ign: ignV, uid: uidV, team: team });
-            return true;
-          } },
-      ],
+            UI.toast('लॉग हो गया', 'ok');
+            ctx.close();
+            APP.rerender();
+          }).catch(function (e) {
+            ctx.button.disabled = false; ctx.button.textContent = 'सेव करें';
+            UI.toast(e.message || 'सेव नहीं हुआ', 'err');
+          });
+          return true;
+        } }
+      ]
     });
-    if (addLink) addLink.addEventListener('click', UI.closeModal);
   }
 
-  function confirmJoin(t, user, info) {
-    user = Store.userById(user.id);
-    function complete() {
-      var slotNo = Store.nextSlotNo(t.id);
-      var regs = Store.registrations();
-      regs.push({ id: Store.uid('r'), userId: user.id, tournamentId: t.id, teamName: info.team,
-        inGameName: info.ign, inGameId: info.uid, slotNo: slotNo, position: 'A',
-        paymentStatus: 'paid', registeredAt: new Date().toISOString() });
-      Store.saveRegistrations(regs);
-      // persist IGN/UID to profile for next time
-      user.freeFireUID = info.uid; Store.upsertUser(user);
-      UI.closeModal();
-      registrationSuccess(t, slotNo);
-      if (window.App) App.refreshChrome();
+  /* ============ syllabus ============ */
+
+  const syllabusState = { subjectId: 'physics', filter: 'all', q: '' };
+
+  function syllabus(root, subjectId) {
+    if (subjectId) syllabusState.subjectId = subjectId;
+    UI.clear(root);
+    const wrap = el('div', { class: 'page fade-up' });
+    root.appendChild(wrap);
+
+    const tabs = el('div', { class: 'pill-tabs' });
+    SYLLABUS.subjects.forEach(function (s) {
+      tabs.appendChild(el('button', {
+        class: syllabusState.subjectId === s.id ? 'active' : '', text: s.hi,
+        onclick: function () { syllabusState.subjectId = s.id; syllabus(root); }
+      }));
+    });
+
+    const search = UI.input({ placeholder: 'चैप्टर खोजें…', value: syllabusState.q, style: 'max-width:240px' });
+    search.addEventListener('input', function () { syllabusState.q = search.value; renderList(); });
+
+    wrap.appendChild(el('div', { class: 'row row-wrap mb12' }, [tabs, el('div', { class: 'spacer' }), search]));
+
+    const filters = el('div', { class: 'row row-wrap mb16' });
+    [['all', 'सभी'], ['pending', 'बाकी'], ['progress', 'चल रहे'], ['done', 'पूरे'], ['small', 'छोटे चैप्टर'], ['high', 'हाई वेटेज']]
+      .forEach(function (f) {
+        filters.appendChild(el('button', {
+          class: 'chip' + (syllabusState.filter === f[0] ? ' chip-blue' : ''), text: f[1],
+          style: 'cursor:pointer',
+          onclick: function () { syllabusState.filter = f[0]; syllabus(root); }
+        }));
+      });
+    wrap.appendChild(filters);
+
+    const summary = ANALYSIS.subjectSummary(syllabusState.subjectId);
+    wrap.appendChild(el('div', { class: 'grid g4 mb16' }, [
+      UI.stat(summary.done + '/' + summary.total, 'चैप्टर पूरे'),
+      UI.stat(summary.pct + '%', 'औसत प्रगति'),
+      UI.stat(summary.weightPct + '%', 'वेटेज कवर'),
+      UI.stat(summary.started, 'चल रहे')
+    ]));
+
+    const listBox = el('div', { class: 'grid g2' });
+    wrap.appendChild(listBox);
+
+    function renderList() {
+      UI.clear(listBox);
+      const q = syllabusState.q.trim().toLowerCase();
+      let items = SYLLABUS.chaptersOf(syllabusState.subjectId).map(function (c) { return ANALYSIS.chapterStatus(c.id); });
+
+      if (syllabusState.filter === 'pending')  items = items.filter(function (s) { return !s.started; });
+      if (syllabusState.filter === 'progress') items = items.filter(function (s) { return s.started && !s.isDone; });
+      if (syllabusState.filter === 'done')     items = items.filter(function (s) { return s.isDone; });
+      if (syllabusState.filter === 'small')    items = items.filter(function (s) { return s.chapter.isSmall; });
+      if (syllabusState.filter === 'high')     items = items.filter(function (s) { return SYLLABUS.weightOf(s.chapter).known && SYLLABUS.weightOf(s.chapter).value >= 1.5; });
+      if (q) items = items.filter(function (s) {
+        return s.chapter.hi.toLowerCase().indexOf(q) >= 0 || s.chapter.en.toLowerCase().indexOf(q) >= 0;
+      });
+
+      if (!items.length) {
+        listBox.appendChild(el('div', { style: 'grid-column:1/-1' },
+          UI.empty('🔍', 'कोई चैप्टर नहीं मिला', 'फ़िल्टर या खोज बदलकर देखें')));
+        return;
+      }
+      items.forEach(function (s) { listBox.appendChild(chapterCard(s)); });
     }
-    if (t.entryFee > 0) {
-      var res = Store.debit(user.id, t.entryFee, 'Entry: ' + t.title, { kind: 'entry', tid: t.id });
-      if (!res) { UI.toast('Payment failed — low balance.', 'error'); return; }
-    }
-    complete();
+    renderList();
   }
 
-  function registrationSuccess(t, slotNo) {
-    UI.openModal({
-      title: '', node: frag('<div class="success">' +
-        '<div class="success-check">🎉</div><h2>You\'re In!</h2>' +
-        '<p class="muted">Joined <strong>' + esc(t.title) + '</strong></p>' +
-        '<div class="success-slot">Your Slot<br><strong>#' + slotNo + '</strong></div>' +
-        '<p class="muted small">Room ID & password will appear on the contest page before start. Get that Booyah! 🔥</p></div>'),
-      actions: [ { label: 'View Joinings', kind: 'ghost', onClick: function () { location.hash = '#/joinings/' + t.id; } },
-        { label: 'Done', kind: 'primary', onClick: function () { if (window.App) App.route(); } } ],
+  function chapterCard(s) {
+    const c = s.chapter;
+    const w = SYLLABUS.weightOf(c);
+    const card = el('div', { class: 'ch-card', onclick: function () { location.hash = '#/chapter/' + c.id; } });
+
+    card.appendChild(el('div', { class: 'ch-top' }, [
+      el('div', { class: 'subject-dot', style: 'background:' + SUBJ_COLOR[c.subjectId] }),
+      el('div', { style: 'min-width:0;flex:1' }, [
+        el('div', { class: 'ch-name', text: c.hi }),
+        el('div', { class: 'ch-en', text: c.en })
+      ]),
+      el('div', { class: 'ch-pct', style: 'color:' + (s.isDone ? 'var(--green)' : s.pct ? 'var(--brand)' : 'var(--text-3)'),
+        text: s.pct + '%' })
+    ]));
+
+    card.appendChild(el('div', { class: 'mt12' }, UI.bar(s.pct, s.isDone ? 'green' : s.pct >= 50 ? '' : 'amber')));
+
+    const meta = el('div', { class: 'ch-meta' });
+    meta.appendChild(UI.chip(w.known ? '~' + w.value + ' प्रश्न/पेपर' : 'वेटेज डेटा नहीं', w.known && w.value >= 2 ? 'red' : w.known ? 'blue' : ''));
+    meta.appendChild(UI.chip(c.difficultyHi, c.difficulty === 'easy' ? 'green' : c.difficulty === 'hard' ? 'red' : 'amber'));
+    if (c.isSmall) meta.appendChild(UI.chip('छोटा चैप्टर', 'violet'));
+    if (s.isDone) meta.appendChild(UI.chip('✓ पूरा', 'green'));
+    card.appendChild(meta);
+
+    const steps = el('div', { class: 'ch-steps' });
+    S.checkpoints.forEach(function (cp) {
+      const on = s.steps[cp.key];
+      const part = cp.key === 'pyq' && !on && s.pyqRatio > 0;
+      steps.appendChild(el('div', {
+        class: 'step-dot' + (on ? ' on' : part ? ' part' : ''),
+        title: cp.label,
+        text: cp.key === 'pyq' && !on ? Math.round(s.pyqRatio * 100) + '%' : cp.icon
+      }));
     });
+    card.appendChild(steps);
+    return card;
   }
 
-  /* =====================================================================
-   * RESULT SUBMISSION
-   * ================================================================== */
-  function submitResult(tid) {
-    if (!Auth.requireAuth()) return;
-    var t = Store.tournamentById(tid), user = Auth.current();
-    var reg = Store.regsFor(tid).find(function (r) { return r.userId === user.id; });
-    var body = frag('' +
-      '<div class="result-form">' +
-        '<p class="muted small">Upload your result screenshot. Admin verifies & credits your winnings.</p>' +
-        '<div class="field"><label>Your Rank</label><select id="rRank">' +
-          '<option value="1">🥇 #1 Booyah</option><option value="2">🥈 #2</option><option value="3">🥉 #3</option><option value="0">Other</option></select></div>' +
-        '<div class="field"><label>Kills</label><input id="rKills" type="number" min="0" max="60" value="0"/></div>' +
-        '<div class="field"><label>Screenshot</label><input id="rShot" type="file" accept="image/*"/><span class="field-err"></span><div id="shotPrev" class="shot-prev"></div></div>' +
-      '</div>');
-    var shot = null;
-    body.querySelector('#rShot').addEventListener('change', function (e) {
-      var f = e.target.files[0]; if (!f) return;
-      if (f.size > 3 * 1024 * 1024) { UI.toast('Max 3MB image.', 'warn'); e.target.value = ''; return; }
-      var rd = new FileReader(); rd.onload = function () { shot = rd.result; body.querySelector('#shotPrev').innerHTML = '<img src="' + shot + '"/>'; }; rd.readAsDataURL(f);
-    });
-    UI.openModal({ title: '📸 Submit Result', node: body,
-      actions: [ { label: 'Cancel', kind: 'ghost' },
-        { label: 'Submit for Review', kind: 'primary', onClick: function () {
-            var rank = Number(body.querySelector('#rRank').value), kills = Number(body.querySelector('#rKills').value) || 0;
-            if (!shot) { UI.toast('Attach a screenshot.', 'warn'); return true; }
-            var m = Store.matches();
-            m.push({ id: Store.uid('m'), tournamentId: tid, rank: rank, kills: kills, winnerUserId: user.id,
-              inGameName: reg ? reg.inGameName : user.username, screenshot: shot, verified: false, createdAt: new Date().toISOString() });
-            Store.saveMatches(m);
-            UI.closeModal(); UI.toast('Result submitted! Admin will review it.', 'success');
-          } } ] });
-  }
+  /* ============ chapter detail ============ */
 
-  /* =====================================================================
-   * MY CONTESTS
-   * ================================================================== */
-  function myContests() {
-    if (!Auth.requireAuth()) return UI.screen({ title: 'My Contests', back: false });
-    var user = Auth.current();
-    var regs = Store.registrations().filter(function (r) { return r.userId === user.id && r.paymentStatus === 'paid'; });
-    var subs = Store.matches().filter(function (m) { return m.winnerUserId === user.id; });
-    var node = UI.screen({ title: 'My Contests', back: false });
-    var cards = regs.map(function (r) {
-      var t = Store.tournamentById(r.tournamentId); if (!t) return '';
-      var sub = subs.find(function (m) { return m.tournamentId === t.id; });
-      var tag = sub ? (sub.verified ? '<span class="pill pill-live">WON ' + coins(Store.rankPrize(t, sub.rank) + (sub.kills || 0) * (t.perKill || 0)) + '</span>' : '<span class="pill pill-review">⏳ Review</span>') : '';
-      return '<article class="ccard" data-open="' + t.id + '"><div class="ccard-top"><div class="ccard-badges">' + typeChip(t.type) + statusPill(t.status) + tag + '</div>' +
-        (t.status === 'upcoming' ? '<span class="ccard-time" data-deadline="' + iso(t) + '">⏱ …</span>' : '') + '</div>' +
-        '<h3 class="ccard-title">' + esc(t.title) + '</h3>' +
-        '<div class="ccard-sub">Slot #' + r.slotNo + ' • IGN ' + esc(r.inGameName) + ' • 📅 ' + UI.fmtDate(t.date) + ' ' + esc(t.time) + '</div>' +
-        '<div class="ccard-actions"><button class="btn btn-ghost btn-sm" data-view="' + t.id + '">Details</button>' +
-          '<button class="btn btn-primary btn-sm" data-jn="' + t.id + '">Joinings</button></div></article>';
-    }).join('');
-    node._body.innerHTML = regs.length ? '<div class="clist">' + cards + '</div>'
-      : emptyBox('You haven\'t joined any contest yet.', '#/', 'Browse Contests');
-    node._body.querySelectorAll('[data-jn]').forEach(function (b) { b.addEventListener('click', function (e) { e.stopPropagation(); location.hash = '#/joinings/' + b.getAttribute('data-jn'); }); });
-    wireCards(node._body);
-    if (window.App) App.tickCountdowns();
-    return node;
-  }
-
-  /* =====================================================================
-   * WALLET
-   * ================================================================== */
-  function wallet() {
-    if (!Auth.requireAuth()) return UI.screen({ title: 'Wallet', back: false });
-    var user = Auth.current();
-    var txns = Store.transactions().filter(function (x) { return x.userId === user.id; });
-    var node = UI.screen({ title: 'My Wallet', back: false });
-    var rows = txns.length ? txns.map(function (x) {
-      var up = x.type === 'credit';
-      var st = x.status === 'pending' ? ' <span class="tx-pending">pending</span>' : x.status === 'failed' ? ' <span class="tx-failed">failed</span>' : '';
-      return '<div class="txn"><div class="txn-ic ' + (up ? 'up' : 'down') + '">' + (up ? '↓' : '↑') + '</div>' +
-        '<div class="txn-body"><div class="txn-desc">' + esc(x.description) + st + '</div><div class="txn-date muted">' + UI.fmtDateTime(x.date) + '</div></div>' +
-        '<div class="txn-amt ' + (up ? 'up' : 'down') + '">' + (up ? '+' : '−') + num(x.amount) + '</div></div>';
-    }).join('') : '<div class="empty"><p class="muted">No transactions yet.</p></div>';
-
-    node._body.innerHTML = '' +
-      '<div class="wallet-card">' +
-        '<span class="wallet-label">Balance</span>' +
-        '<div class="wallet-bal">' + coins(user.balance) + '</div>' +
-        '<div class="wallet-note">1 Coin = ' + rupees(Store.settings().coinPerRupee || 1) + ' • withdrawable to UPI</div>' +
-        '<div class="wallet-actions"><button class="btn btn-primary" id="addBtn">＋ Add Coins</button>' +
-          '<button class="btn btn-ghost" id="wdBtn">↑ Withdraw</button></div>' +
-      '</div>' +
-      '<div class="wallet-mini"><div><span class="wm-val">' + coins(user.totalEarnings) + '</span><span class="wm-l">Total won</span></div>' +
-        '<div><span class="wm-val">' + user.tournamentsWon + '</span><span class="wm-l">Wins</span></div>' +
-        '<div><span class="wm-val">' + user.matchesPlayed + '</span><span class="wm-l">Played</span></div></div>' +
-      '<h4 class="blk-title" style="margin-top:20px">Transaction History</h4><div class="txns">' + rows + '</div>';
-
-    node._body.querySelector('#addBtn').addEventListener('click', addMoney);
-    node._body.querySelector('#wdBtn').addEventListener('click', withdraw);
-    return node;
-  }
-
-  function addMoney() {
-    var user = Auth.current(); var s = Store.settings(); var rate = s.coinPerRupee || 1; var min = s.minAdd || 10;
-    var body = frag('<div class="money-form">' +
-      '<div class="amount-quick">' + [50, 100, 250, 500].map(function (a) { return '<button class="qbtn" data-amt="' + a + '">＋' + a + '</button>'; }).join('') + '</div>' +
-      '<div class="field"><label>Enter amount (₹)</label><input id="amtIn" type="number" min="' + min + '" placeholder="min ₹' + min + '"/><span class="field-err"></span></div>' +
-      '<div class="conv" id="conv">You get <strong>0 Coins</strong></div>' +
-      '<p class="muted small">Pay via UPI/Card. Coins credit instantly (demo gateway).</p></div>');
-    function upd() { var v = Number(body.querySelector('#amtIn').value) || 0; body.querySelector('#conv').innerHTML = 'You get <strong>' + num(Math.floor(v / rate)) + ' Coins</strong>'; }
-    body.querySelectorAll('.qbtn').forEach(function (b) { b.addEventListener('click', function () { body.querySelector('#amtIn').value = b.getAttribute('data-amt'); upd(); }); });
-    body.querySelector('#amtIn').addEventListener('input', upd);
-    UI.openModal({ title: '＋ Add Coins', node: body,
-      actions: [ { label: 'Cancel', kind: 'ghost' }, { label: 'Proceed to Pay', kind: 'primary', onClick: function () {
-        var input = body.querySelector('#amtIn'); var rup = Number(input.value);
-        if (!(rup >= min)) { UI.fieldError(input, 'Minimum ₹' + min + '.'); return true; }
-        if (!UI.Validate.amount(rup)) { UI.fieldError(input, 'Enter a valid amount.'); return true; }
-        UI.closeModal();
-        Payments.Pay(rup, { description: 'Add Coins' }).then(function (r) {
-          if (r.status === 'success') { var c = Math.floor(rup / rate); Store.credit(user.id, c, 'Added ' + c + ' coins (' + UI.rupees(rup) + ')', { kind: 'add' });
-            UI.toast(c + ' coins added! 🪙', 'coin'); if (window.App) { App.refreshChrome(); App.route(); } }
-          else if (r.status === 'failed') UI.toast(r.reason || 'Payment failed.', 'error'); else UI.toast('Payment cancelled.', 'info');
-        });
-        return true;
-      } } ] });
-  }
-
-  function withdraw() {
-    var user = Store.userById(Auth.current().id); var s = Store.settings(); var min = s.minWithdraw || 50;
-    var body = frag('<div class="money-form">' +
-      '<div class="reg-bal">Withdrawable: <strong>' + coins(user.balance) + '</strong></div>' +
-      '<div class="field"><label>UPI ID</label><input id="upiIn" placeholder="yourname@okhdfc"/><span class="field-err"></span></div>' +
-      '<div class="field"><label>Coins to withdraw</label><input id="wAmt" type="number" min="' + min + '" placeholder="min ' + min + '"/><span class="field-err"></span></div>' +
-      '<p class="muted small">Withdrawals are reviewed by admin, then paid to your UPI within 24h.</p></div>');
-    UI.openModal({ title: '↑ Withdraw to UPI', node: body,
-      actions: [ { label: 'Cancel', kind: 'ghost' }, { label: 'Request Withdrawal', kind: 'primary', onClick: function () {
-        var upi = body.querySelector('#upiIn'), amtI = body.querySelector('#wAmt'), amt = Number(amtI.value), ok = true;
-        if (!UI.Validate.upi(upi.value)) { UI.fieldError(upi, 'Enter a valid UPI ID.'); ok = false; }
-        if (!(amt >= min)) { UI.fieldError(amtI, 'Minimum ' + min + ' coins.'); ok = false; }
-        else if (amt > user.balance) { UI.fieldError(amtI, 'More than your balance.'); ok = false; }
-        if (!ok) return true;
-        var u = Store.userById(user.id); u.balance = Math.floor(u.balance - amt); Store.upsertUser(u);
-        Store.addTransaction({ id: Store.uid('tx'), userId: user.id, amount: amt, type: 'debit', status: 'pending',
-          description: 'Withdraw to ' + upi.value, date: new Date().toISOString(), meta: { kind: 'withdrawal', upi: upi.value } });
-        UI.closeModal(); UI.toast('Withdrawal requested. Awaiting approval.', 'success');
-        if (window.App) { App.refreshChrome(); App.route(); }
-        return true;
-      } } ] });
-  }
-
-  /* =====================================================================
-   * LEADERBOARD
-   * ================================================================== */
-  function leaderboard() {
-    var period = 'weekly';
-    var node = UI.screen({ title: 'Leaderboard', back: false });
-    var body = node._body;
-    body.innerHTML = '<div class="lb-tabs" id="lbTabs">' +
-      '<button class="lbtab active" data-p="weekly">Weekly</button>' +
-      '<button class="lbtab" data-p="monthly">Monthly</button>' +
-      '<button class="lbtab" data-p="fulltime">Fulltime</button></div><div id="lbBody"></div>';
-
-    function since(p) { var d = new Date(); if (p === 'weekly') d.setDate(d.getDate() - 7); else if (p === 'monthly') d.setMonth(d.getMonth() - 1); else return 0; return d.getTime(); }
-    function kd(u) { return u.deaths ? (u.kills / u.deaths) : u.kills; }
+  function chapterDetail(root, chapterId) {
+    const c = SYLLABUS.chapter(chapterId);
+    if (!c) { root.appendChild(UI.empty('❓', 'चैप्टर नहीं मिला')); return; }
 
     function render() {
-      var players = Store.users().filter(function (u) { return u.role === 'user'; });
-      var sinceMs = since(period);
-      var ranked = players.map(function (u) {
-        var win = period === 'fulltime' ? u.totalEarnings : Store.earningsSince(u.id, sinceMs);
-        return { u: u, win: win };
-      }).filter(function (r) { return period === 'fulltime' || r.win > 0; })
-        .sort(function (a, b) { return b.win - a.win; });
-      if (period === 'fulltime') ranked.sort(function (a, b) { return b.win - a.win; });
+      UI.clear(root);
+      const s = ANALYSIS.chapterStatus(chapterId);
+      const w = SYLLABUS.weightOf(c);
+      const wrap = el('div', { class: 'page page-narrow fade-up' });
+      root.appendChild(wrap);
 
-      var me = Auth.current();
-      var top = ranked.slice(0, 3);
-      var podium = ranked.length ? '<div class="podium">' + [top[1], top[0], top[2]].map(function (r, i) {
-        var place = i === 0 ? 2 : i === 1 ? 1 : 3; if (!r) return '<div class="pod pod-' + place + ' pod-empty"></div>';
-        return '<div class="pod pod-' + place + '"><div class="pod-medal">' + ({1:'🥇',2:'🥈',3:'🥉'}[place]) + '</div>' +
-          '<div class="pod-av">' + esc(r.u.username.slice(0, 1).toUpperCase()) + '</div>' +
-          '<div class="pod-name">' + esc(r.u.username) + '</div><div class="pod-val">' + coins(r.win) + '</div></div>';
-      }).join('') + '</div>' : '';
+      wrap.appendChild(el('button', { class: 'btn btn-sm btn-ghost mb12', text: '← सिलेबस',
+        onclick: function () { location.hash = '#/syllabus/' + c.subjectId; } }));
 
-      var rows = ranked.map(function (r, i) {
-        var mine = me && r.u.id === me.id;
-        return '<div class="lb-row' + (mine ? ' lb-me' : '') + '"><span class="lb-rank rank-' + (i + 1) + '">' + (i + 1) + '</span>' +
-          '<span class="lb-av">' + esc(r.u.username.slice(0, 1).toUpperCase()) + '</span>' +
-          '<div class="lb-info"><div class="lb-name">' + esc(r.u.username) + (mine ? ' <span class="you-tag">YOU</span>' : '') + '</div>' +
-          '<div class="lb-sub muted">🏆 ' + r.u.tournamentsWon + ' wins • 🎯 ' + kd(r.u).toFixed(2) + ' K/D</div></div>' +
-          '<span class="lb-val">' + coins(r.win) + '</span></div>';
-      }).join('');
+      // header
+      wrap.appendChild(el('div', { class: 'card card-pad' }, [
+        el('div', { class: 'row' }, [
+          el('div', { style: 'min-width:0;flex:1' }, [
+            el('h2', { style: 'font-size:19px', text: c.hi }),
+            el('div', { class: 'small dim', text: c.en })
+          ]),
+          UI.ring(s.pct, s.isDone ? 'var(--green)' : SUBJ_COLOR[c.subjectId])
+        ]),
+        el('div', { class: 'ch-meta mt12' }, [
+          UI.chip(SYLLABUS.subject(c.subjectId).hi),
+          UI.chip(c.difficultyHi, c.difficulty === 'easy' ? 'green' : c.difficulty === 'hard' ? 'red' : 'amber'),
+          c.isSmall ? UI.chip('छोटा चैप्टर — जल्दी निपटेगा', 'violet') : null,
+          s.isDone ? UI.chip('✓ चैप्टर पूरा', 'green') : null
+        ].filter(Boolean)),
+        // weightage — with its source, or an honest "no data"
+        el('div', { class: 'mt12 small' }, w.known
+          ? el('div', {}, [
+              el('b', { text: '~' + w.value + ' प्रश्न प्रति पेपर' }),
+              c.totalQ ? el('span', { class: 'dim', text: '  ·  2021–26 में कुल ' + c.totalQ + ' प्रश्न' }) : null,
+              el('div', { class: 'tiny dim', text: 'स्रोत: ' + c.weightSource })
+            ])
+          : el('div', { class: 'dim' }, [
+              el('span', { text: 'इस चैप्टर का सत्यापित वेटेज डेटा उपलब्ध नहीं है' }),
+              c.note ? el('div', { class: 'tiny', text: c.note }) : null
+            ]))
+      ]));
 
-      body.querySelector('#lbBody').innerHTML = ranked.length ? podium + '<div class="lb-list">' + rows + '</div>'
-        : '<div class="empty"><span class="empty-ic">🏆</span><p class="muted">No winnings in this period yet. Be the first on the board!</p></div>';
+      // checkpoints
+      wrap.appendChild(el('div', { class: 'section-title', text: 'पाँच स्टेप — सब पूरे तो चैप्टर डन' }));
+
+      ['lecture', 'dpp', 'module'].forEach(function (key) {
+        const cp = S.checkpoints.filter(function (x) { return x.key === key; })[0];
+        const on = s.steps[key];
+        wrap.appendChild(el('div', { class: 'cp' + (on ? ' done' : '') }, [
+          el('div', { class: 'cp-ic', text: cp.icon }),
+          el('div', { class: 'cp-body' }, [
+            el('div', { class: 'cp-t', text: cp.label }),
+            el('div', { class: 'cp-h', text: cp.hint })
+          ]),
+          el('button', {
+            class: 'btn btn-sm ' + (on ? '' : 'btn-primary'),
+            text: on ? '✓ हो गया' : 'मार्क करें',
+            onclick: async function (e) {
+              const btn = e.currentTarget;
+              if (btn.disabled) return;
+              btn.disabled = true;
+              // read the live value, not the one captured when this row was drawn
+              const was = !!DB.progressOf(chapterId)[key + '_done'];
+              const patch = {}; patch[key + '_done'] = !was;
+              try {
+                await DB.saveProgress(chapterId, patch);
+                if (!was) await DB.addLog({ chapter_id: chapterId, activity: key, qty: 1, minutes: 0 });
+                UI.toast(!was ? cp.label + ' पूरा ✓' : cp.label + ' हटाया', 'ok');
+              } catch (err) { UI.toast(err.message, 'err'); }
+              render();
+            }
+          })
+        ]));
+      });
+
+      // PYQ counter
+      const target = s.pyqTarget;
+      wrap.appendChild(el('div', { class: 'cp' + (s.steps.pyq ? ' done' : '') }, [
+        el('div', { class: 'cp-ic', text: '🎯' }),
+        el('div', { class: 'cp-body' }, [
+          el('div', { class: 'cp-t', text: 'PYQ — ' + s.pyqCount + ' / ' + target }),
+          el('div', { class: 'cp-h', text: s.steps.pyq ? 'लक्ष्य पूरा' : (target - s.pyqCount) + ' और बाकी' }),
+          el('div', { class: 'mt8' }, UI.bar(s.pyqRatio * 100, s.steps.pyq ? 'green' : ''))
+        ]),
+        el('div', { class: 'stepper' }, [
+          el('button', { text: '−', onclick: function (e) { bumpPyq(-10, e.currentTarget); } }),
+          el('button', { text: '+', onclick: function (e) { bumpPyq(10, e.currentTarget); } })
+        ])
+      ]));
+
+      async function bumpPyq(n, btn) {
+        if (btn && btn.disabled) return;
+        if (btn) btn.disabled = true;
+        // always start from the stored count so quick taps can't overwrite each other
+        const next = Math.max(0, (DB.progressOf(chapterId).pyq_count || 0) + n);
+        try {
+          await DB.saveProgress(chapterId, { pyq_count: next });
+          if (n > 0) await DB.addLog({ chapter_id: chapterId, activity: 'pyq', qty: n, minutes: 0 });
+        } catch (err) { UI.toast(err.message, 'err'); }
+        render();
+      }
+
+      // test
+      wrap.appendChild(el('div', { class: 'cp' + (s.steps.test ? ' done' : '') }, [
+        el('div', { class: 'cp-ic', text: '🏁' }),
+        el('div', { class: 'cp-body' }, [
+          el('div', { class: 'cp-t', text: 'चैप्टर टेस्ट' }),
+          el('div', { class: 'cp-h', text: s.testScore == null ? 'अभी नहीं दिया'
+            : s.testScore + '% ' + (s.steps.test ? '· पास' : '· ' + S.testPassScore + '% चाहिए') })
+        ]),
+        el('button', { class: 'btn btn-sm ' + (s.steps.test ? '' : 'btn-primary'), text: 'स्कोर डालें',
+          onclick: function () { testModal(chapterId, s.testScore, render); } })
+      ]));
+
+      // actions
+      wrap.appendChild(el('div', { class: 'grid g2 mt16' }, [
+        el('button', { class: 'btn btn-primary', text: '🎯 इस चैप्टर की प्रैक्टिस',
+          onclick: function () { location.hash = '#/practice/' + chapterId; } }),
+        el('button', { class: 'btn', text: '＋ पढ़ाई लॉग करें', onclick: function () { logModal(chapterId); } })
+      ]));
+
+      // confidence
+      wrap.appendChild(el('div', { class: 'section-title', text: 'आत्मविश्वास' }));
+      const confRow = el('div', { class: 'row', style: 'gap:6px' });
+      for (let i = 1; i <= 5; i++) {
+        (function (n) {
+          confRow.appendChild(el('button', {
+            class: 'btn btn-sm' + (s.progress.confidence >= n ? ' btn-primary' : ''),
+            text: '★',
+            onclick: async function (e) {
+              const btn = e.currentTarget;
+              if (btn.disabled) return;
+              btn.disabled = true;
+              const cur = DB.progressOf(chapterId).confidence || 0;
+              try { await DB.saveProgress(chapterId, { confidence: cur === n ? 0 : n }); }
+              catch (err) { UI.toast(err.message, 'err'); }
+              render();
+            }
+          }));
+        })(i);
+      }
+      confRow.appendChild(el('div', { class: 'small dim', style: 'margin-left:8px',
+        text: ['अभी रेट नहीं किया', 'बहुत कमज़ोर', 'कमज़ोर', 'ठीक-ठाक', 'अच्छा', 'पक्का'][s.progress.confidence] }));
+      wrap.appendChild(confRow);
+
+      // revision
+      if (s.isDone) {
+        const base = s.progress.last_studied || (s.progress.updated_at || '').slice(0, 10);
+        const round = s.progress.revision_count || 0;
+        const gap = S.revisionGaps[Math.min(round, S.revisionGaps.length - 1)];
+        const due = base ? UI.addDays(base, gap) : null;
+        const overdue = due ? UI.daysBetween(due, UI.today()) : -1;
+        wrap.appendChild(el('div', { class: 'section-title', text: 'रिवीज़न' }));
+        wrap.appendChild(el('div', { class: 'cp' + (overdue >= 0 ? '' : ' done') }, [
+          el('div', { class: 'cp-ic', text: '🔁' }),
+          el('div', { class: 'cp-body' }, [
+            el('div', { class: 'cp-t', text: round + ' रिवीज़न हो चुके' }),
+            el('div', { class: 'cp-h', text: due ? (overdue >= 0 ? 'अभी करना है (' + UI.dateHi(due) + ' से due)' : 'अगला ' + UI.dateHi(due) + ' को') : '—' })
+          ]),
+          el('button', { class: 'btn btn-sm btn-primary', text: 'रिवीज़न किया', onclick: async function (e) {
+            const btn = e.currentTarget;
+            if (btn.disabled) return;
+            btn.disabled = true;
+            try {
+              await DB.saveProgress(chapterId, { revision_count: (DB.progressOf(chapterId).revision_count || 0) + 1 });
+              await DB.addLog({ chapter_id: chapterId, activity: 'revision', qty: 1, minutes: 30 });
+              UI.toast('रिवीज़न दर्ज ✓', 'ok');
+            } catch (err) { UI.toast(err.message, 'err'); }
+            render();
+          } })
+        ]));
+      }
+
+      // topics
+      wrap.appendChild(el('div', { class: 'section-title', text: 'टॉपिक (' + c.topics.length + ')' }));
+      const tl = el('div', { class: 'card' });
+      c.topics.forEach(function (t, i) {
+        tl.appendChild(el('div', { class: 'row', style: 'padding:11px 14px;' + (i ? 'border-top:1px solid var(--border-2)' : '') }, [
+          el('div', { style: 'min-width:0' }, [
+            el('div', { style: 'font-weight:600;font-size:14px', text: t.hi }),
+            el('div', { class: 'tiny dim', text: t.en })
+          ]),
+          el('div', { class: 'spacer' }),
+          el('button', { class: 'btn btn-sm btn-ghost', text: 'प्रैक्टिस →',
+            onclick: function () { location.hash = '#/practice/' + chapterId; } })
+        ]));
+      });
+      wrap.appendChild(tl);
+
+      // notes
+      wrap.appendChild(el('div', { class: 'section-title', text: 'मेरे नोट्स' }));
+      const ta = el('textarea', { class: 'textarea', placeholder: 'फ़ॉर्मूले, गलतियाँ, याद रखने की बातें…' });
+      ta.value = s.progress.notes || '';
+      wrap.appendChild(ta);
+      wrap.appendChild(el('button', { class: 'btn btn-sm mt8', text: 'नोट सेव करें', onclick: async function () {
+        await DB.saveProgress(chapterId, { notes: ta.value });
+        UI.toast('नोट सेव हो गया', 'ok');
+      } }));
+
+      // this chapter's uploaded material
+      const mine = DB.cache.resources.filter(function (r) { return r.chapter_id === chapterId; });
+      wrap.appendChild(el('div', { class: 'section-title', text: 'इस चैप्टर की सामग्री (' + mine.length + ')' }));
+      if (!mine.length) {
+        wrap.appendChild(el('div', { class: 'card' },
+          UI.empty('📁', 'कुछ अपलोड नहीं है', 'DPP, मॉड्यूल या किताब अपलोड करें',
+            el('button', { class: 'btn btn-primary btn-sm', text: 'अपलोड करें', onclick: function () { location.hash = '#/resources'; } }))));
+      } else {
+        const box = el('div', { class: 'card' });
+        mine.forEach(function (r, i) { box.appendChild(resourceRow(r, i > 0, function () { render(); })); });
+        wrap.appendChild(box);
+      }
     }
-    body.querySelector('#lbTabs').addEventListener('click', function (e) {
-      var b = e.target.closest('[data-p]'); if (!b) return; period = b.getAttribute('data-p');
-      body.querySelectorAll('.lbtab').forEach(function (x) { x.classList.remove('active'); }); b.classList.add('active'); render();
-    });
     render();
-    return node;
   }
 
-  /* =====================================================================
-   * MENU
-   * ================================================================== */
-  function menu() {
-    if (!Auth.requireAuth()) return UI.screen({ title: 'Menu', back: false });
-    var u = Auth.current();
-    var kd = u.deaths ? (u.kills / u.deaths).toFixed(2) : String(u.kills);
-    var node = UI.screen({ title: 'Menu', back: false });
-    function item(href, ic, label, right) { return '<a href="' + href + '" class="menu-item"><span class="mi-ic">' + ic + '</span><span class="mi-label">' + label + '</span>' + (right || '<span class="mi-arrow">›</span>') + '</a>'; }
-    node._body.innerHTML = '' +
-      '<div class="menu-profile"><div class="mp-av">' + esc(u.username.slice(0, 1).toUpperCase()) + '</div>' +
-        '<div class="mp-name">' + esc(u.username) + (u.role === 'admin' ? ' <span class="pill pill-live">ADMIN</span>' : '') + '</div>' +
-        '<div class="mp-mob muted">📱 ' + esc(u.mobile) + '</div></div>' +
-      '<div class="menu-stats"><div><span class="ms-val">' + u.matchesPlayed + '</span><span class="ms-l">Played</span></div>' +
-        '<div><span class="ms-val">' + u.kills + '</span><span class="ms-l">Kills</span></div>' +
-        '<div><span class="ms-val">' + coins(u.totalEarnings) + '</span><span class="ms-l">Earned</span></div></div>' +
-      '<div class="menu-list">' +
-        item('#/wallet', '🪙', 'My Wallet', '<span class="mi-right">' + coins(u.balance) + '</span>') +
-        item('#/my-contests', '🎟️', 'My Contests') +
-        item('#/statistics', '📊', 'My Statistics') +
-        item('#/leaderboard', '🏆', 'Top Players') +
-        (u.role === 'admin' ? item('#/admin', '🛠️', 'Admin Panel') : '') +
-        item('#/how', 'ℹ️', 'How It Works') +
-        item('#/contact', '🎧', 'Contact Us') +
-        item('#/faq', '❓', 'FAQ') +
-        item('#/legal', '📜', 'Rules · Privacy · Terms') +
-      '</div>' +
-      '<button class="btn btn-danger btn-block" id="logoutBtn2" style="margin-top:16px">Logout</button>' +
-      '<p class="disclaimer">🔞 18+ only. Skill-based gaming. Play responsibly. Not available where prohibited by law. Coins are for in-app contest entry.</p>';
-    node._body.querySelector('#logoutBtn2').addEventListener('click', function () { Auth.logout(); UI.toast('Logged out.', 'info'); location.hash = '#/'; if (window.App) App.refreshChrome(); });
-    return node;
-  }
-
-  /* ---- Statistics ---- */
-  function statistics() {
-    if (!Auth.requireAuth()) return UI.screen({ title: 'Statistics', back: false });
-    var u = Auth.current();
-    var kd = u.deaths ? (u.kills / u.deaths).toFixed(2) : String(u.kills);
-    var joined = Store.registrations().filter(function (r) { return r.userId === u.id && r.paymentStatus === 'paid'; }).length;
-    var node = UI.screen({ title: 'My Statistics', backTo: '#/menu' });
-    function tile(ic, v, l) { return '<div class="itile"><span class="itile-ic">' + ic + '</span><span class="itile-val">' + v + '</span><span class="itile-label">' + l + '</span></div>'; }
-    node._body.innerHTML = '<div class="info-grid stat-grid">' +
-      tile('🎮', joined, 'Contests Joined') + tile('🏆', u.tournamentsWon, 'Wins') +
-      tile('💀', u.kills, 'Total Kills') + tile('🎯', kd, 'K/D Ratio') +
-      tile('🪙', coins(u.totalEarnings), 'Total Winnings') + tile('📊', u.matchesPlayed, 'Matches Played') +
-    '</div>';
-    return node;
-  }
-
-  /* ---- Content pages ---- */
-  function contentScreen(title, html, backTo) { return UI.screen({ title: title, backTo: backTo || '#/menu', html: '<div class="content">' + html + '</div>' }); }
-  function howItWorks() {
-    return contentScreen('How It Works',
-      '<ol class="how-steps">' +
-      '<li><b>Create account</b> — sign up with your mobile & Free Fire UID.</li>' +
-      '<li><b>Add coins</b> — add money via UPI; ₹ converts to Coins (1 Coin = ₹1).</li>' +
-      '<li><b>Join a contest</b> — pick Solo/Duo/Squad, pay entry from coins, get your slot.</li>' +
-      '<li><b>Play the match</b> — Room ID & password show on the contest page before start.</li>' +
-      '<li><b>Submit result</b> — upload your screenshot after the match.</li>' +
-      '<li><b>Win & withdraw</b> — admin verifies, winnings hit your wallet, withdraw to UPI.</li>' +
-      '</ol><p class="muted small">Prize pool = total entries − platform fee. It grows as more players join.</p>');
-  }
-  function faq() {
-    var s = Store.settings();
-    return contentScreen('FAQ',
-      qa('How is the prize pool decided?', 'Pool = (players × entry fee) minus a ' + (s.commissionPercent || 20) + '% platform fee. More joins = bigger pool.') +
-      qa('When do I get the Room ID?', 'It appears on the contest page about 10 minutes before the start time.') +
-      qa('How fast are withdrawals?', 'Requests are reviewed by admin and paid to your UPI, usually within 24 hours.') +
-      qa('What are Coins?', '1 Coin = ' + rupees(s.coinPerRupee || 1) + '. You add coins to join contests and withdraw winnings to UPI.') +
-      qa('What if someone hacks?', 'Report with proof. Cheaters are banned and entry is refunded to fair players.'));
-  }
-  function qa(q, a) { return '<div class="qa"><div class="qa-q">Q. ' + esc(q) + '</div><div class="qa-a muted">' + esc(a) + '</div></div>'; }
-  function contact() {
-    var s = Store.settings();
-    return contentScreen('Contact Us',
-      '<p>Need help? Reach our support team:</p>' +
-      '<div class="contact-row">📱 <a href="tel:' + esc(s.supportMobile || '') + '">' + esc(s.supportMobile || '—') + '</a></div>' +
-      '<div class="contact-row">💬 <a href="https://wa.me/91' + esc(s.supportMobile || '') + '">WhatsApp support</a></div>' +
-      '<p class="muted small">Support hours: 10 AM – 10 PM IST, all days.</p>');
-  }
-  function about() {
-    return contentScreen('About', '<p><b>' + esc((APP_CONFIG.brand)) + '</b> is a skill-based Free Fire tournament platform for Indian gamers. Compete daily, climb the leaderboard, and win real rewards.</p>');
-  }
-  function legal() {
-    return contentScreen('Rules · Privacy · Terms',
-      '<h4>Fair Play</h4><p class="muted">No emulators, hacks, teaming or panels. Violations = permanent ban.</p>' +
-      '<h4>Privacy</h4><p class="muted">We store only what\'s needed to run contests. Demo build keeps data in your browser (localStorage).</p>' +
-      '<h4>Terms</h4><p class="muted">18+ only. Skill-based gaming. Coins are for in-app contest entry. Winnings withdrawable to UPI subject to verification. Not available where prohibited by law.</p>');
-  }
-
-  /* =====================================================================
-   * AUTH SCREENS
-   * ================================================================== */
-  function loginPage() {
-    if (Auth.isLoggedIn()) { location.hash = '#/'; return UI.screen({ title: '', back: false }); }
-    var node = UI.screen({ title: 'Login', backTo: '#/' });
-    node._body.innerHTML = '<div class="auth">' +
-      '<div class="auth-logo">🔥</div><h2 class="auth-h">Welcome back</h2><p class="muted">Login to join contests & win.</p>' +
-      '<div class="field"><label>Mobile number</label><input id="li_id" inputmode="numeric" placeholder="10-digit mobile"/><span class="field-err"></span></div>' +
-      '<div class="field"><label>Password</label><input id="li_pw" type="password" placeholder="••••••"/><span class="field-err"></span></div>' +
-      '<button class="btn btn-primary btn-block btn-lg" id="loginBtn">Login</button>' +
-      '<p class="auth-alt">New here? <a href="#/register">Create account →</a></p>' +
-      '<div class="auth-demo">Demo — Player: <code>9800000001 / player123</code> · Admin: <code>8955005076 / admin@123</code></div></div>';
-    function go() {
-      var i = node._body.querySelector('#li_id'), p = node._body.querySelector('#li_pw');
-      UI.clearError(i); UI.clearError(p);
-      if (!i.value.trim()) { UI.fieldError(i, 'Enter your mobile.'); return; }
-      if (!p.value) { UI.fieldError(p, 'Enter password.'); return; }
-      var res = Auth.login(i.value.trim(), p.value);
-      if (!res.ok) { UI.fieldError(p, res.error); return; }
-      UI.toast('Welcome, ' + res.user.username + '! 🔥', 'success');
-      location.hash = res.user.role === 'admin' ? '#/admin' : '#/'; if (window.App) App.refreshChrome();
-    }
-    node._body.querySelector('#loginBtn').addEventListener('click', go);
-    node._body.querySelector('#li_pw').addEventListener('keydown', function (e) { if (e.key === 'Enter') go(); });
-    return node;
-  }
-  function registerPage() {
-    if (Auth.isLoggedIn()) { location.hash = '#/'; return UI.screen({ title: '', back: false }); }
-    var node = UI.screen({ title: 'Create Account', backTo: '#/' });
-    node._body.innerHTML = '<div class="auth">' +
-      '<div class="auth-logo">🔥</div><h2 class="auth-h">Join the Arena</h2><p class="muted">Register & get your first Booyah paid.</p>' +
-      '<div class="field"><label>Username</label><input id="rg_user" placeholder="3–18 chars"/><span class="field-err"></span></div>' +
-      '<div class="field"><label>Mobile number</label><input id="rg_mob" inputmode="numeric" placeholder="10-digit mobile"/><span class="field-err"></span></div>' +
-      '<div class="field"><label>Free Fire UID</label><input id="rg_uid" inputmode="numeric" placeholder="In-game ID"/><span class="field-err"></span></div>' +
-      '<div class="field"><label>Password</label><input id="rg_pw" type="password" placeholder="min 6 chars"/><span class="field-err"></span></div>' +
-      '<button class="btn btn-primary btn-block btn-lg" id="regBtn">Create Account</button>' +
-      '<p class="auth-alt">Already registered? <a href="#/login">Login →</a></p></div>';
-    node._body.querySelector('#regBtn').addEventListener('click', function () {
-      var f = { user: node._body.querySelector('#rg_user'), mob: node._body.querySelector('#rg_mob'), uid: node._body.querySelector('#rg_uid'), pw: node._body.querySelector('#rg_pw') };
-      Object.keys(f).forEach(function (k) { UI.clearError(f[k]); });
-      var ok = true;
-      if (!UI.Validate.username(f.user.value.trim())) { UI.fieldError(f.user, '3–18 letters/numbers/._'); ok = false; }
-      if (!UI.Validate.mobile(f.mob.value.trim())) { UI.fieldError(f.mob, 'Valid 10-digit mobile.'); ok = false; }
-      if (!UI.Validate.ffuid(f.uid.value.trim())) { UI.fieldError(f.uid, 'Valid UID (6–12 digits).'); ok = false; }
-      if (!UI.Validate.password(f.pw.value)) { UI.fieldError(f.pw, 'Min 6 characters.'); ok = false; }
-      if (!ok) return;
-      var res = Auth.register({ username: f.user.value.trim(), mobile: f.mob.value.trim(), freeFireUID: f.uid.value.trim(), password: f.pw.value });
-      if (!res.ok) { UI.fieldError(f.mob, res.error); UI.toast(res.error, 'error'); return; }
-      UI.toast('Welcome to LegentArena! 🔥', 'success'); location.hash = '#/'; if (window.App) App.refreshChrome();
+  function testModal(chapterId, current, onDone) {
+    const score = UI.input({ type: 'number', min: '0', max: '100', value: current == null ? '' : current, placeholder: '0–100' });
+    UI.modal({
+      title: 'चैप्टर टेस्ट का स्कोर',
+      body: el('div', {}, [
+        UI.field('कितने प्रतिशत आए?', score, S.testPassScore + '% या ज़्यादा पर यह स्टेप पूरा माना जाएगा'),
+      ]),
+      actions: [
+        { label: 'रद्द', class: 'btn-ghost' },
+        { label: 'सेव करें', class: 'btn-primary', onClick: function (ctx) {
+          const v = parseFloat(score.value);
+          if (isNaN(v) || v < 0 || v > 100) { UI.toast('0 से 100 के बीच स्कोर डालें', 'err'); return true; }
+          ctx.button.disabled = true;
+          DB.saveProgress(chapterId, { test_score: v })
+            .then(function () { return DB.addLog({ chapter_id: chapterId, activity: 'test', qty: 1, minutes: 60, score: v }); })
+            .then(function () { UI.toast('स्कोर सेव ✓', 'ok'); ctx.close(); onDone(); })
+            .catch(function (e) { ctx.button.disabled = false; UI.toast(e.message, 'err'); });
+          return true;
+        } }
+      ]
     });
-    return node;
   }
 
-  function emptyBox(msg, href, label) {
-    return '<div class="empty"><span class="empty-ic">🤔</span><p class="muted">' + esc(msg) + '</p><a href="' + href + '" class="btn btn-primary btn-sm">' + esc(label) + '</a></div>';
+  /* ============ resources ============ */
+
+  const KINDS = [
+    { value: 'dpp', label: 'DPP' }, { value: 'module', label: 'मॉड्यूल' },
+    { value: 'book', label: 'किताब' }, { value: 'pyq', label: 'PYQ पेपर' },
+    { value: 'biq', label: 'BIQ' }, { value: 'notes', label: 'नोट्स' }, { value: 'other', label: 'अन्य' }
+  ];
+  const KIND_HI = {}; KINDS.forEach(function (k) { KIND_HI[k.value] = k.label; });
+  const resState = { kind: 'all', subject: 'all' };
+
+  function resources(root) {
+    UI.clear(root);
+    const wrap = el('div', { class: 'page fade-up' });
+    root.appendChild(wrap);
+
+    wrap.appendChild(el('div', { class: 'row mb16' }, [
+      el('div', {}, [
+        el('div', { style: 'font-weight:700;font-size:16px', text: 'मेरी सामग्री' }),
+        el('div', { class: 'small dim', text: 'किताबें, DPP, मॉड्यूल, BIQ, PYQ पेपर — सब एक जगह' })
+      ]),
+      el('div', { class: 'spacer' }),
+      el('button', { class: 'btn btn-primary', text: '⬆ अपलोड करें', onclick: function () { uploadModal(function () { resources(root); }); } })
+    ]));
+
+    const filters = el('div', { class: 'row row-wrap mb16' });
+    [{ value: 'all', label: 'सभी' }].concat(KINDS).forEach(function (k) {
+      filters.appendChild(el('button', {
+        class: 'chip' + (resState.kind === k.value ? ' chip-blue' : ''), text: k.label, style: 'cursor:pointer',
+        onclick: function () { resState.kind = k.value; resources(root); }
+      }));
+    });
+    wrap.appendChild(filters);
+
+    let list = DB.cache.resources;
+    if (resState.kind !== 'all') list = list.filter(function (r) { return r.kind === resState.kind; });
+
+    if (!list.length) {
+      wrap.appendChild(el('div', { class: 'card' }, UI.empty('📚', 'अभी कुछ अपलोड नहीं है',
+        'अपने DPP, मॉड्यूल और किताबें यहाँ रखें — चैप्टर पेज पर भी दिखेंगी',
+        el('button', { class: 'btn btn-primary', text: 'पहली फ़ाइल अपलोड करें', onclick: function () { uploadModal(function () { resources(root); }); } }))));
+      return;
+    }
+
+    const box = el('div', { class: 'card' });
+    list.forEach(function (r, i) { box.appendChild(resourceRow(r, i > 0, function () { resources(root); })); });
+    wrap.appendChild(box);
   }
 
-  window.Pages = {
-    home: home, contestDetail: contestDetail, joinings: joinings, myContests: myContests,
-    wallet: wallet, leaderboard: leaderboard, menu: menu, statistics: statistics,
-    howItWorks: howItWorks, faq: faq, contact: contact, about: about, legal: legal,
-    loginPage: loginPage, registerPage: registerPage,
-    startRegistration: startRegistration, submitResult: submitResult,
+  function resourceRow(r, border, onChange) {
+    const ch = r.chapter_id ? SYLLABUS.chapter(r.chapter_id) : null;
+    return el('div', { class: 'row', style: 'padding:12px 14px;gap:11px;' + (border ? 'border-top:1px solid var(--border-2)' : '') }, [
+      el('div', { style: 'font-size:20px' }, r.kind === 'book' ? '📕' : r.kind === 'pyq' ? '📄' : r.kind === 'module' ? '📘' : r.kind === 'notes' ? '🗒️' : '📝'),
+      el('div', { style: 'min-width:0;flex:1' }, [
+        el('div', { style: 'font-weight:650;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', text: r.title }),
+        el('div', { class: 'tiny dim', text: [KIND_HI[r.kind] || r.kind, ch ? ch.hi : null, r.year || null, UI.bytes(r.file_size)].filter(Boolean).join(' · ') })
+      ]),
+      el('button', { class: 'btn btn-sm', text: 'खोलें', onclick: async function () {
+        try { window.open(await DB.resourceUrl(r.file_path), '_blank'); }
+        catch (e) { UI.toast('फ़ाइल नहीं खुली: ' + e.message, 'err'); }
+      } }),
+      el('button', { class: 'btn btn-sm btn-ghost', text: '🗑', onclick: async function () {
+        if (!await UI.confirm({ title: 'हटाएँ?', message: r.title + ' हटा दी जाएगी।', ok: 'हटाएँ', danger: true })) return;
+        try { await DB.deleteResource(r); UI.toast('हटा दी गई', 'ok'); onChange(); }
+        catch (e) { UI.toast(e.message, 'err'); }
+      } })
+    ]);
+  }
+
+  function uploadModal(onDone) {
+    const file = el('input', { type: 'file', class: 'input', accept: '.pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.txt' });
+    const title = UI.input({ placeholder: 'जैसे: भौतिकी DPP – आधुनिक भौतिकी' });
+    const kind = UI.select(KINDS);
+    const subj = UI.select([{ value: '', label: '— विषय —' }].concat(
+      SYLLABUS.subjects.map(function (s) { return { value: s.id, label: s.hi }; })));
+    const chap = UI.select([{ value: '', label: '— चैप्टर (वैकल्पिक) —' }]);
+    const year = UI.input({ type: 'number', placeholder: 'साल (वैकल्पिक)', min: '2000', max: '2030' });
+
+    subj.addEventListener('change', function () {
+      UI.clear(chap);
+      chap.appendChild(el('option', { value: '', text: '— चैप्टर (वैकल्पिक) —' }));
+      if (subj.value) SYLLABUS.chaptersOf(subj.value).forEach(function (c) {
+        chap.appendChild(el('option', { value: c.id, text: c.hi }));
+      });
+    });
+    file.addEventListener('change', function () {
+      if (file.files[0] && !title.value) title.value = file.files[0].name.replace(/\.[^.]+$/, '');
+    });
+
+    UI.modal({
+      title: 'सामग्री अपलोड करें',
+      body: el('div', {}, [
+        UI.field('फ़ाइल', file, 'अधिकतम 50 MB · PDF/इमेज/डॉक'),
+        UI.field('नाम', title),
+        el('div', { class: 'grid g2' }, [UI.field('प्रकार', kind), UI.field('साल', year)]),
+        el('div', { class: 'grid g2' }, [UI.field('विषय', subj), UI.field('चैप्टर', chap)])
+      ]),
+      actions: [
+        { label: 'रद्द', class: 'btn-ghost' },
+        { label: 'अपलोड', class: 'btn-primary', onClick: function (ctx) {
+          const f = file.files[0];
+          if (!f) { UI.toast('फ़ाइल चुनें', 'err'); return true; }
+          if (f.size > 50 * 1024 * 1024) { UI.toast('फ़ाइल 50 MB से बड़ी है', 'err'); return true; }
+          if (!title.value.trim()) { UI.toast('नाम लिखें', 'err'); return true; }
+          ctx.button.disabled = true; ctx.button.textContent = 'अपलोड हो रहा है…';
+          DB.uploadResource(f, {
+            title: title.value.trim(), kind: kind.value,
+            subject_id: subj.value || null, chapter_id: chap.value || null,
+            year: year.value ? Number(year.value) : null
+          }).then(function () {
+            UI.toast('अपलोड हो गया ✓', 'ok'); ctx.close(); onDone();
+          }).catch(function (e) {
+            ctx.button.disabled = false; ctx.button.textContent = 'अपलोड';
+            UI.toast(e.message || 'अपलोड नहीं हुआ', 'err');
+          });
+          return true;
+        } }
+      ]
+    });
+  }
+
+  /* ============ analysis page ============ */
+
+  async function analysisPage(root) {
+    UI.clear(root);
+    const wrap = el('div', { class: 'page fade-up' });
+    root.appendChild(wrap);
+    wrap.appendChild(UI.loading());
+
+    let attempts = [];
+    try { attempts = await DB.attemptStats(); } catch (e) { /* offline-safe */ }
+    UI.clear(wrap);
+
+    const o = ANALYSIS.overall();
+    const p = ANALYSIS.pace();
+
+    wrap.appendChild(el('div', { class: 'grid g4' }, [
+      UI.stat(o.pct + '%', 'कुल सिलेबस', o.done + '/' + o.total + ' चैप्टर पूरे'),
+      UI.stat(o.weightPct + '%', 'वेटेज कवर', 'प्रश्न-भार के हिसाब से'),
+      UI.stat(o.pyqSolved, 'PYQ हल किए', 'लक्ष्य ' + o.pyqNeeded),
+      UI.stat(ANALYSIS.streak(), 'दिन की स्ट्रीक')
+    ]));
+
+    // last 7 days
+    wrap.appendChild(el('div', { class: 'section-title', text: 'पिछले 7 दिन' }));
+    const week = ANALYSIS.last7();
+    const maxMin = Math.max(60, Math.max.apply(null, week.map(function (d) { return d.minutes; })));
+    const chart = el('div', { class: 'card card-pad' });
+    const bars = el('div', { class: 'row', style: 'align-items:flex-end;gap:8px;height:150px' });
+    week.forEach(function (d) {
+      const h = Math.round((d.minutes / maxMin) * 118);
+      bars.appendChild(el('div', { style: 'flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;justify-content:flex-end;height:100%' }, [
+        el('div', { class: 'tiny', style: 'font-weight:700;color:var(--text-2)', text: d.minutes ? Math.round(d.minutes / 60 * 10) / 10 + 'घं' : '' }),
+        el('div', { title: UI.dateHi(d.date) + ': ' + UI.mins(d.minutes),
+          style: 'width:100%;max-width:44px;height:' + Math.max(4, h) + 'px;border-radius:7px 7px 3px 3px;background:' +
+                 (d.minutes >= p.dailyGoalMin ? 'var(--green)' : d.minutes ? 'var(--brand)' : 'var(--border)') }),
+        el('div', { class: 'tiny dim', text: UI.dayNameHi(d.date).slice(0, 3) })
+      ]));
+    });
+    chart.appendChild(bars);
+    chart.appendChild(el('div', { class: 'tiny dim center mt8',
+      text: 'कुल ' + UI.mins(week.reduce(function (a, d) { return a + d.minutes; }, 0)) +
+            ' · ' + week.reduce(function (a, d) { return a + d.questions; }, 0) + ' प्रश्न' }));
+    wrap.appendChild(chart);
+
+    // subject-wise
+    wrap.appendChild(el('div', { class: 'section-title', text: 'विषय-वार' }));
+    const sg = el('div', { class: 'grid g3' });
+    SYLLABUS.subjects.forEach(function (s) {
+      const sum = ANALYSIS.subjectSummary(s.id);
+      sg.appendChild(el('div', { class: 'card card-pad' }, [
+        el('div', { class: 'row' }, [
+          el('div', { style: 'font-weight:700', text: s.hi }),
+          el('div', { class: 'spacer' }),
+          el('div', { style: 'font-weight:800;color:' + s.color, text: sum.pct + '%' })
+        ]),
+        el('div', { class: 'mt8' }, UI.bar(sum.pct)),
+        el('div', { class: 'tiny dim mt8', text: sum.done + ' पूरे · ' + sum.started + ' चल रहे · ' + (sum.total - sum.done - sum.started) + ' बाकी' })
+      ]));
+    });
+    wrap.appendChild(sg);
+
+    // biggest gaps — high weightage, low completion
+    const gaps = ANALYSIS.biggestGaps(6);
+    if (gaps.length) {
+      wrap.appendChild(el('div', { class: 'section-title', text: 'सबसे महँगे गैप (हाई वेटेज, कम तैयारी)' }));
+      const gw = el('div', { class: 'tbl-wrap' });
+      const tb = el('table', { class: 'tbl' });
+      tb.appendChild(el('thead', {}, el('tr', {}, [
+        el('th', { text: 'चैप्टर' }), el('th', { text: 'विषय' }),
+        el('th', { text: 'प्रश्न/पेपर' }), el('th', { text: 'प्रगति' })
+      ])));
+      const tbody = el('tbody');
+      gaps.forEach(function (s) {
+        const w = SYLLABUS.weightOf(s.chapter);
+        tbody.appendChild(el('tr', { style: 'cursor:pointer', onclick: function () { location.hash = '#/chapter/' + s.chapter.id; } }, [
+          el('td', {}, [el('div', { style: 'font-weight:650', text: s.chapter.hi }), el('div', { class: 'tiny dim', text: s.chapter.en })]),
+          el('td', { class: 'small', text: SYLLABUS.subject(s.chapter.subjectId).short }),
+          el('td', { class: 'num', style: 'font-weight:700', text: '~' + w.value }),
+          el('td', { style: 'min-width:130px' }, [UI.bar(s.pct, 'amber'), el('div', { class: 'tiny dim mt8', text: s.pct + '%' })])
+        ]));
+      });
+      tb.appendChild(tbody); gw.appendChild(tb); wrap.appendChild(gw);
+    }
+
+    // accuracy from real attempts
+    const accMap = ANALYSIS.accuracyByChapter(attempts);
+    const accKeys = Object.keys(accMap).filter(function (k) { return SYLLABUS.chapter(k); });
+    wrap.appendChild(el('div', { class: 'section-title', text: 'प्रैक्टिस सटीकता' }));
+    if (!accKeys.length) {
+      wrap.appendChild(el('div', { class: 'card' }, UI.empty('🎯', 'अभी कोई प्रैक्टिस डेटा नहीं',
+        'प्रैक्टिस सेशन पूरा करें — फिर चैप्टर-वार सटीकता यहाँ दिखेगी',
+        el('button', { class: 'btn btn-primary', text: 'प्रैक्टिस शुरू करें', onclick: function () { location.hash = '#/practice'; } }))));
+    } else {
+      const aw = el('div', { class: 'tbl-wrap' });
+      const at = el('table', { class: 'tbl' });
+      at.appendChild(el('thead', {}, el('tr', {}, [
+        el('th', { text: 'चैप्टर' }), el('th', { text: 'हल' }), el('th', { text: 'सही' }),
+        el('th', { text: 'सटीकता' }), el('th', { text: 'औसत समय' })
+      ])));
+      const ab = el('tbody');
+      accKeys.sort(function (a, b) { return accMap[a].accuracy - accMap[b].accuracy; }).forEach(function (k) {
+        const m = accMap[k];
+        ab.appendChild(el('tr', { style: 'cursor:pointer', onclick: function () { location.hash = '#/chapter/' + k; } }, [
+          el('td', { style: 'font-weight:650', text: SYLLABUS.chapter(k).hi }),
+          el('td', { class: 'num', text: m.total }),
+          el('td', { class: 'num', text: m.correct }),
+          el('td', {}, UI.chip(m.accuracy + '%', m.accuracy >= 75 ? 'green' : m.accuracy >= 50 ? 'amber' : 'red')),
+          el('td', { class: 'num small', text: m.avgSeconds + ' सेकंड' })
+        ]));
+      });
+      at.appendChild(ab); aw.appendChild(at); wrap.appendChild(aw);
+    }
+
+    // recent sessions
+    wrap.appendChild(el('div', { class: 'section-title', text: 'पिछले प्रैक्टिस सेशन' }));
+    const sessBox = el('div');
+    wrap.appendChild(sessBox);
+    sessBox.appendChild(UI.loading());
+    DB.sessionHistory(12).then(function (rows) {
+      UI.clear(sessBox);
+      if (!rows.length) { sessBox.appendChild(el('div', { class: 'card' }, UI.empty('📝', 'कोई सेशन नहीं'))); return; }
+      const box = el('div', { class: 'card' });
+      rows.forEach(function (r, i) {
+        const acc = r.total ? Math.round((r.correct / r.total) * 100) : 0;
+        box.appendChild(el('div', { class: 'row', style: 'padding:12px 14px;' + (i ? 'border-top:1px solid var(--border-2)' : '') }, [
+          el('div', { style: 'min-width:0;flex:1' }, [
+            el('div', { style: 'font-weight:650;font-size:14px',
+              text: (r.config && r.config.chapters ? r.config.chapters.length : 0) + ' चैप्टर · ' + r.total + ' प्रश्न' }),
+            el('div', { class: 'tiny dim', text: UI.dateHi(r.started_at.slice(0, 10)) + ' · ' + UI.mins(Math.round(r.seconds / 60)) })
+          ]),
+          UI.chip(acc + '%', acc >= 75 ? 'green' : acc >= 50 ? 'amber' : 'red')
+        ]));
+      });
+      sessBox.appendChild(box);
+    }).catch(function () { UI.clear(sessBox); });
+  }
+
+  /* ============ profile ============ */
+
+  function profile(root) {
+    UI.clear(root);
+    const wrap = el('div', { class: 'page page-narrow fade-up' });
+    root.appendChild(wrap);
+    const pr = DB.cache.profile || {};
+
+    const name = UI.input({ value: pr.name || '' });
+    const exam = UI.input({ value: pr.target_exam || S.defaultExam });
+    const date = UI.input({ type: 'date', value: (pr.exam_date || S.defaultExamDate) });
+    const goal = UI.input({ type: 'number', min: '30', max: '900', step: '30', value: pr.daily_goal_min || S.defaultDailyGoalMin });
+
+    wrap.appendChild(el('div', { class: 'card card-pad' }, [
+      el('div', { class: 'row mb16' }, [
+        el('div', { class: 'auth-logo', style: 'margin:0;width:44px;height:44px;font-size:19px',
+          text: (pr.name || 'वि').slice(0, 1) }),
+        el('div', {}, [
+          el('div', { style: 'font-weight:700', text: pr.name || 'विद्यार्थी' }),
+          el('div', { class: 'small dim', text: (DB.cache.user && DB.cache.user.email) || '' })
+        ])
+      ]),
+      UI.field('नाम', name),
+      UI.field('लक्ष्य परीक्षा', exam),
+      el('div', { class: 'grid g2' }, [
+        UI.field('परीक्षा की तारीख़', date),
+        UI.field('रोज़ का लक्ष्य (मिनट)', goal)
+      ]),
+      el('button', { class: 'btn btn-primary btn-block', text: 'सेव करें', onclick: async function (e) {
+        const btn = e.currentTarget;
+        btn.disabled = true; btn.textContent = 'सेव…';
+        try {
+          await DB.updateProfile({
+            name: name.value.trim(), target_exam: exam.value.trim(),
+            exam_date: date.value, daily_goal_min: parseInt(goal.value, 10) || S.defaultDailyGoalMin
+          });
+          UI.toast('प्रोफ़ाइल सेव ✓', 'ok');
+          APP.refreshChrome();
+        } catch (err) { UI.toast(err.message, 'err'); }
+        btn.disabled = false; btn.textContent = 'सेव करें';
+      } })
+    ]));
+
+    const o = ANALYSIS.overall();
+    wrap.appendChild(el('div', { class: 'section-title', text: 'मेरा रिकॉर्ड' }));
+    wrap.appendChild(el('div', { class: 'grid g2' }, [
+      UI.stat(o.done + '/' + o.total, 'चैप्टर पूरे'),
+      UI.stat(o.pyqSolved, 'PYQ हल किए'),
+      UI.stat(DB.cache.logs.length, 'लॉग एंट्री'),
+      UI.stat(DB.cache.resources.length, 'फ़ाइलें')
+    ]));
+
+    wrap.appendChild(el('div', { class: 'section-title', text: 'अन्य' }));
+    wrap.appendChild(el('div', { class: 'card' }, [
+      el('button', { class: 'row', style: 'padding:13px 15px;width:100%;text-align:left',
+        onclick: function () { PRACTICE.importModal(function () { UI.toast('प्रश्न जुड़ गए', 'ok'); }); } },
+        [el('span', { text: '➕' }), el('span', { style: 'font-weight:600', text: 'प्रश्न इम्पोर्ट करें' })]),
+      el('button', { class: 'row', style: 'padding:13px 15px;width:100%;text-align:left;border-top:1px solid var(--border-2);color:var(--red)',
+        onclick: async function () {
+          if (!await UI.confirm({ title: 'लॉगआउट?', message: 'आपका डेटा सुरक्षित रहेगा।', ok: 'लॉगआउट', danger: true })) return;
+          await DB.signOut();
+          location.hash = '#/login';
+          APP.route();
+        } },
+        [el('span', { text: '🚪' }), el('span', { style: 'font-weight:600', text: 'लॉगआउट' })])
+    ]));
+
+    wrap.appendChild(el('div', { class: 'tiny dim center mt24',
+      text: 'PadhAI v' + window.CONFIG.app.version + ' · आपका डेटा सिर्फ़ आपके खाते में सुरक्षित है' }));
+  }
+
+  window.PAGES = {
+    authScreen: authScreen, dashboard: dashboard, syllabus: syllabus,
+    chapterDetail: chapterDetail, resources: resources, analysisPage: analysisPage,
+    profile: profile, logModal: logModal
   };
 })();
