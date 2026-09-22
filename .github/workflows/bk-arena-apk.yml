@@ -1,14 +1,9 @@
 name: Build BK Arena APK
-
 on:
   push:
-    branches:
-      - bk-arena-apk-build-20260922
-    paths:
-      - "bk-arena-build/**"
-      - ".github/workflows/bk-arena-apk.yml"
+    branches: [bk-arena-apk-build-20260922]
+    paths: [".github/workflows/bk-arena-apk.yml"]
   workflow_dispatch:
-
 permissions:
   contents: read
 
@@ -16,13 +11,9 @@ jobs:
   build-apk:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Java 21
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "21"
@@ -34,131 +25,77 @@ jobs:
           export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/cmdline-tools/16.0/bin:$ANDROID_HOME/platform-tools:$PATH"
           SDKMANAGER="$(command -v sdkmanager || true)"
-          if [ -z "$SDKMANAGER" ]; then
-            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"
-          fi
-          test -x "$SDKMANAGER"
+          if [ -z "$SDKMANAGER" ]; then SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -n 1)"; fi
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
           echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
-          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.11.1"
 
-      - name: Create native Android wrapper
+      - name: Create BK Arena mobile game
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p bk-arena-android/app/src/main/java/com/ankittharol/bkarena
-          mkdir -p bk-arena-android/app/src/main/assets
+          mkdir -p bk-arena-android/app/src/main/res/values
+          mkdir -p bk-arena-android/app/src/main/assets/site
 
           cat > bk-arena-android/settings.gradle <<'EOF'
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
+            repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+            repositories { google(); mavenCentral() }
           }
-          rootProject.name = "BKArena"
+          rootProject.name="BKArena"
           include(":app")
           EOF
-
           cat > bk-arena-android/build.gradle <<'EOF'
-          plugins {
-              id 'com.android.application' version '8.9.2' apply false
-          }
+          plugins { id 'com.android.application' version '8.9.2' apply false }
           EOF
-
           cat > bk-arena-android/gradle.properties <<'EOF'
           org.gradle.jvmargs=-Xmx3072m -Dfile.encoding=UTF-8
           android.useAndroidX=true
-          android.nonTransitiveRClass=true
           EOF
-
           cat > bk-arena-android/app/build.gradle <<'EOF'
-          plugins {
-              id 'com.android.application'
-          }
-
+          plugins { id 'com.android.application' }
           android {
-              namespace 'com.ankittharol.bkarena'
-              compileSdk 35
-
-              defaultConfig {
-                  applicationId 'com.ankittharol.bkarena'
-                  minSdk 26
-                  targetSdk 35
-                  versionCode 1
-                  versionName '0.1.0'
-              }
-
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                  }
-              }
-
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
-              }
+            namespace 'com.ankittharol.bkarena'
+            compileSdk 35
+            defaultConfig {
+              applicationId 'com.ankittharol.bkarena'
+              minSdk 26
+              targetSdk 35
+              versionCode 1
+              versionName '0.1.0'
+            }
           }
           EOF
-
-          cat > bk-arena-android/app/src/main/AndroidManifest.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <application
-                  android:allowBackup="true"
-                  android:hardwareAccelerated="true"
-                  android:label="BK Arena"
-                  android:theme="@style/AppTheme"
-                  android:usesCleartextTraffic="false">
-                  <activity
-                      android:name=".MainActivity"
-                      android:configChanges="orientation|screenSize|keyboardHidden"
-                      android:exported="true"
-                      android:screenOrientation="sensorLandscape">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-
-          mkdir -p bk-arena-android/app/src/main/res/values
           cat > bk-arena-android/app/src/main/res/values/styles.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
           <resources>
-              <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">
-                  <item name="android:fontFamily">sans</item>
-                  <item name="android:windowFullscreen">true</item>
-                  <item name="android:windowActionModeOverlay">true</item>
-                  <item name="android:colorAccent">#D7C6A4</item>
-                  <item name="android:navigationBarColor">#0D0D0D</item>
-                  <item name="android:statusBarColor">#0D0D0D</item>
-                  <item name="android:windowLightStatusBar">false</item>
-              </style>
+            <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">
+              <item name="android:windowFullscreen">true</item>
+              <item name="android:navigationBarColor">#10110e</item>
+              <item name="android:statusBarColor">#10110e</item>
+            </style>
           </resources>
           EOF
-
+          cat > bk-arena-android/app/src/main/AndroidManifest.xml <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+            <application android:label="BK Arena" android:theme="@style/AppTheme" android:hardwareAccelerated="true">
+              <activity android:name=".MainActivity" android:exported="true" android:screenOrientation="sensorLandscape"
+                android:configChanges="orientation|screenSize|keyboardHidden">
+                <intent-filter>
+                  <action android:name="android.intent.action.MAIN"/>
+                  <category android:name="android.intent.category.LAUNCHER"/>
+                </intent-filter>
+              </activity>
+            </application>
+          </manifest>
+          EOF
           cat > bk-arena-android/app/src/main/java/com/ankittharol/bkarena/MainActivity.java <<'EOF'
           package com.ankittharol.bkarena;
-
           import android.app.Activity;
           import android.os.Bundle;
           import android.view.View;
@@ -168,78 +105,90 @@ jobs:
           import android.webkit.WebViewClient;
 
           public class MainActivity extends Activity {
-              private WebView webView;
-
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  getWindow().getDecorView().setSystemUiVisibility(
-                      View.SYSTEM_UI_FLAG_FULLSCREEN
-                      | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                      | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                      | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                      | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                      | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                  );
-
-                  webView = new WebView(this);
-                  setContentView(webView);
-
-                  WebSettings settings = webView.getSettings();
-                  settings.setJavaScriptEnabled(true);
-                  settings.setDomStorageEnabled(true);
-                  settings.setAllowFileAccess(true);
-                  settings.setAllowContentAccess(true);
-                  settings.setMediaPlaybackRequiresUserGesture(false);
-                  settings.setBuiltInZoomControls(false);
-                  settings.setDisplayZoomControls(false);
-                  settings.setSupportZoom(false);
-                  settings.setLoadWithOverviewMode(true);
-                  settings.setUseWideViewPort(true);
-
-                  webView.setWebViewClient(new WebViewClient());
-                  webView.setWebChromeClient(new WebChromeClient());
-                  webView.setBackgroundColor(0xFF0D0D0D);
-                  webView.loadUrl("file:///android_asset/site/index.html");
-              }
-
-              @Override
-              public void onBackPressed() {
-                  if (webView != null && webView.canGoBack()) {
-                      webView.goBack();
-                  } else {
-                      super.onBackPressed();
-                  }
-              }
-
-              @Override
-              protected void onResume() {
-                  super.onResume();
-                  if (webView != null) {
-                      webView.onResume();
-                      webView.resumeTimers();
-                  }
-              }
-
-              @Override
-              protected void onPause() {
-                  if (webView != null) {
-                      webView.onPause();
-                      webView.pauseTimers();
-                  }
-                  super.onPause();
-              }
+            WebView web;
+            @Override public void onCreate(Bundle b) {
+              super.onCreate(b);
+              getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_FULLSCREEN|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY|View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+              web=new WebView(this);
+              setContentView(web);
+              WebSettings s=web.getSettings();
+              s.setJavaScriptEnabled(true); s.setDomStorageEnabled(true);
+              s.setAllowFileAccess(true); s.setMediaPlaybackRequiresUserGesture(false);
+              web.setWebChromeClient(new WebChromeClient());
+              web.setWebViewClient(new WebViewClient());
+              web.setBackgroundColor(0xff10110e);
+              web.loadUrl("file:///android_asset/site/index.html");
+            }
+            @Override public void onBackPressed() {
+              if(web!=null && web.canGoBack()) web.goBack(); else super.onBackPressed();
+            }
           }
           EOF
 
-      - name: Decode packaged game
-        shell: bash
-        run: |
-          set -euo pipefail
-          base64 --decode bk-arena-build/site.zip.b64 > /tmp/bk-site.zip
-          unzip -q /tmp/bk-site.zip -d bk-arena-android/app/src/main/assets
-          test -f bk-arena-android/app/src/main/assets/site/index.html
-          test -f bk-arena-android/app/src/main/assets/site/assets/engine-DPt_a3Q7.js
+          cat > bk-arena-android/app/src/main/assets/site/index.html <<'EOF'
+          <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+          <title>BK Arena</title><style>
+          *{box-sizing:border-box;touch-action:none}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111;color:#fff;font-family:system-ui}
+          canvas{width:100vw;height:100vh;display:block;background:#c7ad75}.screen{position:fixed;inset:0;background:radial-gradient(circle,#40351f,#111);display:flex;align-items:center;justify-content:center;z-index:9}
+          .card{text-align:center;max-width:760px;padding:24px}.small{opacity:.65;letter-spacing:.2em}.title{font-size:clamp(42px,9vw,92px);margin:8px;font-weight:900}
+          button{border:0;border-radius:14px;padding:15px 22px;font-weight:800;background:#e0c279;color:#17130c;margin:7px}
+          #levels{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.lvl{min-width:72px}.locked{opacity:.35}
+          #hud{position:fixed;left:10px;right:10px;top:8px;display:none;z-index:4;pointer-events:none}.bar{width:220px;height:18px;background:#39191b;border:2px solid #fff5;border-radius:10px;overflow:hidden}
+          #hp{height:100%;background:#65c76d;width:100%}.row{display:flex;gap:10px;align-items:center}.tag{background:#111b;padding:8px 11px;border-radius:10px}
+          #joy{position:fixed;width:140px;height:140px;border-radius:50%;left:22px;bottom:22px;background:#ffffff18;border:2px solid #ffffff3a;display:none;z-index:5}
+          #knob{position:absolute;width:54px;height:54px;border-radius:50%;background:#ffffff88;left:43px;top:43px}
+          #actions{position:fixed;right:15px;bottom:15px;display:none;z-index:5}.act{width:74px;height:74px;border-radius:50%;padding:0}
+          #msg{position:fixed;left:50%;top:60px;transform:translateX(-50%);background:#111d;padding:10px 16px;border-radius:12px;z-index:6;display:none}
+          #inv{position:fixed;right:15px;top:62px;display:none;z-index:5}.slot{background:#111c;padding:8px;border-radius:8px;margin:4px}
+          </style></head><body>
+          <canvas id="g"></canvas><div id="hud"><div class="row"><div class="tag">BK ARENA · L<span id="ln">1</span></div><div class="bar"><div id="hp"></div></div><div class="tag">Kills <span id="kills">0</span></div><div class="tag">🥟 <span id="food">2</span></div></div></div>
+          <div id="msg"></div><div id="inv"><div class="slot" id="wp">🔪 Knife</div><div class="slot">🩹 Heal</div></div>
+          <div id="joy"><div id="knob"></div></div><div id="actions"><button class="act" id="atk">⚔️</button><button class="act" id="eat">🥟</button><button class="act" id="car">🚜</button></div>
+          <div class="screen" id="intro"><div class="card"><div class="small">BUILT BY ANKIT THAROL</div><div class="title">BK ARENA</div><h2>BIKHARNIYA ROYAL</h2><p>Village survival · loot · vehicles · escalating villagers</p><button id="guest">PLAY AS GUEST</button></div></div>
+          <div class="screen" id="select" style="display:none"><div class="card"><div class="small">CHOOSE MISSION</div><h1>10 LEVELS</h1><div id="levels"></div></div></div>
+          <script>
+          const C=document.querySelector('#g'),x=C.getContext('2d'),hud=q('#hud'),joy=q('#joy'),actions=q('#actions'),inv=q('#inv');
+          let W,H,level=1,unlocked=+(localStorage.getItem('bk-unlocked')||1),running=false,kills=0,food=2,inCar=false;
+          let p={x:600,y:520,r:13,hp:100,vx:0,vy:0},cam={x:0,y:0},en=[],loot=[],houses=[],cars=[],animals=[];
+          function q(s){return document.querySelector(s)} function resize(){W=C.width=innerWidth*devicePixelRatio;H=C.height=innerHeight*devicePixelRatio;x.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0)} addEventListener('resize',resize);resize();
+          const roads=[[-1000,450,3000,150],[520,-1000,135,3000]],pond={x:950,y:760,r:115},temple={x:350,y:230,w:120,h:100};
+          function build(L){level=L;kills=0;food=2;inCar=false;p={x:590,y:530,r:13,hp:100,vx:0,vy:0};en=[];loot=[];houses=[];cars=[];animals=[];
+            for(let i=0;i<18;i++) houses.push({x:140+(i%6)*270,y:110+Math.floor(i/6)*320,w:110,h:85,safe:i%7==0});
+            for(let i=0;i<5+L*2;i++) en.push({x:150+Math.random()*1450,y:90+Math.random()*930,hp:28+L*7,spd:.45+L*.045,hit:0});
+            for(let i=0;i<8;i++) loot.push({x:100+Math.random()*1500,y:80+Math.random()*950,type:i%3?'food':'med'});
+            cars=[{x:720,y:505},{x:1260,y:505}]; for(let i=0;i<8;i++) animals.push({x:100+Math.random()*1500,y:100+Math.random()*900,dx:Math.random()-.5,dy:Math.random()-.5});
+            q('#ln').textContent=L;q('#kills').textContent=0;q('#food').textContent=2;q('#wp').textContent=L<3?'🔪 Knife':L<5?'🪵 Lathi':L<7?'🪓 Axe':L<9?'🔫 Pistol':'💥 Rifle';show('Level '+L+' — survive the village');}
+          function show(t){let m=q('#msg');m.textContent=t;m.style.display='block';clearTimeout(show.t);show.t=setTimeout(()=>m.style.display='none',1500)}
+          function start(L){q('#select').style.display='none';hud.style.display='block';joy.style.display='block';actions.style.display='block';inv.style.display='block';build(L);running=true}
+          q('#guest').onclick=()=>{q('#intro').style.display='none';q('#select').style.display='flex';levels()}
+          function levels(){let a=q('#levels');a.innerHTML='';for(let i=1;i<=10;i++){let b=document.createElement('button');b.className='lvl '+(i>unlocked?'locked':'');b.textContent=i+(i>unlocked?' 🔒':'');b.onclick=()=>i<=unlocked&&start(i);a.appendChild(b)}}
+          function rect(r,c){x.fillStyle=c;x.fillRect(r.x-cam.x,r.y-cam.y,r.w,r.h)}
+          function draw(){x.clearRect(0,0,innerWidth,innerHeight);cam.x=p.x-innerWidth/2;cam.y=p.y-innerHeight/2;
+            x.fillStyle='#c9b178';x.fillRect(0,0,innerWidth,innerHeight);roads.forEach(r=>rect({x:r[0],y:r[1],w:r[2],h:r[3]},'#977a52'));
+            rect(temple,'#e7d4a0');x.fillStyle='#5aa0b0';x.beginPath();x.arc(pond.x-cam.x,pond.y-cam.y,pond.r,0,7);x.fill();
+            houses.forEach(h=>{rect(h,h.safe?'#d9c898':'#a9754e');x.fillStyle='#562f21';x.fillRect(h.x+35-cam.x,h.y+50-cam.y,28,35)});
+            loot.forEach(l=>{x.font='24px sans-serif';x.fillText(l.type==='food'?'🥟':'🩹',l.x-cam.x,l.y-cam.y)});
+            cars.forEach(c=>{x.font='36px sans-serif';x.fillText('🚜',c.x-cam.x,c.y-cam.y)});animals.forEach(a=>{x.font='27px sans-serif';x.fillText('🐃',a.x-cam.x,a.y-cam.y)});
+            en.forEach(e=>{x.fillStyle=e.hit>0?'#fff':'#783b32';x.beginPath();x.arc(e.x-cam.x,e.y-cam.y,12,0,7);x.fill();x.strokeStyle='#222';x.beginPath();x.moveTo(e.x-cam.x,e.y-cam.y+8);x.lineTo(e.x+10-cam.x,e.y+26-cam.y);x.stroke()});
+            x.fillStyle=inCar?'#204e69':'#20252a';x.beginPath();x.arc(innerWidth/2,innerHeight/2,inCar?20:14,0,7);x.fill();x.fillStyle='#fff';x.fillRect(innerWidth/2-3,innerHeight/2-18,6,13);
+          }
+          function step(){if(!running){requestAnimationFrame(step);return}let sp=inCar?5.2:2.7;p.x+=p.vx*sp;p.y+=p.vy*sp;p.x=Math.max(30,Math.min(1700,p.x));p.y=Math.max(30,Math.min(1100,p.y));
+            animals.forEach(a=>{a.x+=a.dx*.45;a.y+=a.dy*.45;if(Math.random()<.01){a.dx=Math.random()-.5;a.dy=Math.random()-.5}});
+            en.forEach(e=>{let dx=p.x-e.x,dy=p.y-e.y,d=Math.hypot(dx,dy);if(d<270){e.x+=dx/d*e.spd;e.y+=dy/d*e.spd}if(d<25&&!inCar){p.hp-=.12+level*.012}if(e.hit>0)e.hit--});
+            loot=loot.filter(l=>{if(Math.hypot(p.x-l.x,p.y-l.y)<28){if(l.type==='food'){food++;q('#food').textContent=food}else p.hp=Math.min(100,p.hp+35);show('Loot collected');return false}return true});
+            q('#hp').style.width=Math.max(0,p.hp)+'%';if(p.hp<=0){running=false;show('You were knocked');setTimeout(()=>start(level),1200)}
+            if(en.length===0){running=false;let n=Math.min(10,level+1);if(n>unlocked){unlocked=n;localStorage.setItem('bk-unlocked',n)}show('LEVEL CLEAR');setTimeout(()=>{hud.style.display=joy.style.display=actions.style.display=inv.style.display='none';q('#select').style.display='flex';levels()},1200)}
+            draw();requestAnimationFrame(step)}requestAnimationFrame(step);
+          function attack(){let range=inCar?45:(level>=9?150:55),dmg=inCar?70:20+level*7;let best=null,bd=999;en.forEach(e=>{let d=Math.hypot(p.x-e.x,p.y-e.y);if(d<range&&d<bd){best=e;bd=d}});if(best){best.hp-=dmg;best.hit=5;if(best.hp<=0){en=en.filter(v=>v!==best);kills++;q('#kills').textContent=kills}}}
+          q('#atk').ontouchstart=e=>{e.preventDefault();attack()};q('#atk').onclick=attack;q('#eat').onclick=()=>{if(food){food--;p.hp=Math.min(100,p.hp+32);q('#food').textContent=food;show('Dal-baati healed you')}};
+          q('#car').onclick=()=>{let c=cars.find(c=>Math.hypot(p.x-c.x,p.y-c.y)<65);if(c||inCar){inCar=!inCar;show(inCar?'Tractor started':'Vehicle exited')}else show('Move closer to tractor')};
+          let keys={};onkeydown=e=>keys[e.key.toLowerCase()]=1;onkeyup=e=>keys[e.key.toLowerCase()]=0;setInterval(()=>{if(keys.w||keys.arrowup)p.vy=-1;else if(keys.s||keys.arrowdown)p.vy=1;else p.vy=0;if(keys.a||keys.arrowleft)p.vx=-1;else if(keys.d||keys.arrowright)p.vx=1;else p.vx=0},16);
+          let J=q('#joy'),K=q('#knob');function jm(e){let t=e.touches?e.touches[0]:e,r=J.getBoundingClientRect(),dx=t.clientX-(r.left+r.width/2),dy=t.clientY-(r.top+r.height/2),m=Math.min(42,Math.hypot(dx,dy)),a=Math.atan2(dy,dx);K.style.transform='translate('+(Math.cos(a)*m)+'px,'+(Math.sin(a)*m)+'px)';p.vx=Math.cos(a);p.vy=Math.sin(a)}
+          J.ontouchstart=J.ontouchmove=e=>{e.preventDefault();jm(e)};J.ontouchend=()=>{K.style.transform='';p.vx=p.vy=0};
+          </script></body></html>
+          EOF
 
       - name: Build debug APK
         working-directory: bk-arena-android
@@ -248,9 +197,9 @@ jobs:
       - name: Verify APK
         shell: bash
         run: |
-          set -euo pipefail
           APK="bk-arena-android/app/build/outputs/apk/debug/app-debug.apk"
           test -s "$APK"
+          unzip -t "$APK" >/dev/null
           ls -lh "$APK"
           sha256sum "$APK"
 
